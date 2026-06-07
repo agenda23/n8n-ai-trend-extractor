@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "schema_version": "1",
+  "data": [
+    {
+      "id": "1000000000000000001",
+      "text": "ClaudeCodeの新機能で爆速開発できるようになった。Cursorとの連携も神ワザ。誰も知らなかったワークフローを公開します",
+      "createdAtISO": "2026-06-06T08:30:00+09:00",
+      "metrics": { "likes": 42, "retweets": 18 }
+    },
+    {
+      "id": "1000000000000000002",
+      "text": "Dify×LINEの完全自動化で副業が爆益化。儲かるAIワークフローの構築手順をまとめた",
+      "createdAtISO": "2026-06-05T14:20:00+09:00",
+      "metrics": { "likes": 67, "retweets": 31 }
+    },
+    {
+      "id": "1000000000000000003",
+      "text": "n8n + Gemini 2.5 Flashで毎朝トレンド分析が爆速化。効率化したい人は要チェック",
+      "createdAtISO": "2026-06-04T11:00:00+09:00",
+      "metrics": { "likes": 25, "retweets": 9 }
+    },
+    {
+      "id": "1000000000000000004",
+      "text": "CursorのAgentモードで誰も知らなかったプロンプトテクニック。Claude Codeより速い場合も",
+      "createdAtISO": "2026-06-06T19:45:00+09:00",
+      "metrics": { "likes": 88, "retweets": 44 }
+    },
+    {
+      "id": "1000000000000000005",
+      "text": "AI副業で詰まりがちなAPI連携エラーを2分で解決する神ワザ集",
+      "createdAtISO": "2026-06-03T09:15:00+09:00",
+      "metrics": { "likes": 33, "retweets": 12 }
+    }
+  ]
+}

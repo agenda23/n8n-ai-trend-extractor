@@ -1,0 +1,335 @@
+{
+  "name": "AIトレンド抽出・リード獲得",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "a1000001-0001-4001-8001-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "mock-condition",
+              "leftValue": "={{ $env.USE_MOCK_X }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1000002-0002-4002-8002-000000000002",
+      "name": "IF Mock X",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [220, 100]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/mock/x-tweets-sample.json",
+        "options": {}
+      },
+      "id": "a1000003-0003-4003-8003-000000000003",
+      "name": "Read Mock X",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nlet content = '';\nif (item.binary?.data?.data) {\n  content = Buffer.from(item.binary.data.data, 'base64').toString('utf8');\n} else if (typeof item.json?.data === 'string') {\n  content = item.json.data;\n}\nreturn [{ json: { stdout: content } }];"
+      },
+      "id": "a1000004-0004-4004-8004-000000000004",
+      "name": "Normalize Mock X",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "command": "twitter search '\"ClaudeCode\" OR \"Claude Code\" OR \"爆速\" OR \"爆益\" OR \"儲かる\" OR \"神ワザ\" OR \"完全自動化\" OR \"誰も知らなかった\" OR \"ワークフロー\" OR \"Dify\" OR \"Cursor\"' --since {{ $today.minus({ days: 3 }).toISODate() }} --until {{ $today.plus({ days: 1 }).toISODate() }} --min-likes 15 --json"
+      },
+      "id": "a1000005-0005-4005-8005-000000000005",
+      "name": "Execute Command",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [660, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://note.com/hashtag/ai%E5%89%AF%E6%A5%AD/rss",
+        "options": {}
+      },
+      "id": "a1000006-0006-4006-8006-000000000006",
+      "name": "RSS Read (note-AI副業)",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [440, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://note.com/hashtag/ai%E3%83%84%E3%83%BC%E3%83%AB/rss",
+        "options": {}
+      },
+      "id": "a1000007-0007-4007-8007-000000000007",
+      "name": "RSS Read (note-AIツール)",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [440, 460],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://brain-market.com/search?keyword=AI",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "a1000008-0008-4008-8008-000000000008",
+      "name": "HTTP Request (Brain)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 620],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://tips.jp/search?q=AI",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "a1000009-0009-4009-8009-000000000009",
+      "name": "HTTP Request (Tips)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 780],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=https://qiita.com/api/v2/items?query=tag:AI+created:>={{ $today.minus({ days: 3 }).toISODate() }}&per_page=20",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.QIITA_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1000010-0010-4010-8010-000000000010",
+      "name": "HTTP Request (Qiita)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 940],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "numberInputs": 6,
+        "options": {}
+      },
+      "id": "a1000011-0011-4011-8011-000000000011",
+      "name": "Merge All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function getHtmlBody(nodeName) {\n  const items = $node[nodeName].all();\n  if (!items.length) return '';\n  const j = items[0].json;\n  return j.data || j.body || '';\n}\n\nfunction parseTipsHtml(html) {\n  const items = [];\n  const seen = new Set();\n  const alts = [...html.matchAll(/alt=\"([^\"]{10,120})\"/g)].map(m => m[1]);\n  const links = [...html.matchAll(/href=\"(https:\\/\\/tips\\.jp\\/u\\/[^\"]+\\/a\\/[^\"]+)\"/g)].map(m => m[1]);\n  for (let i = 0; i < links.length && items.length < 10; i++) {\n    const url = links[i];\n    if (seen.has(url)) continue;\n    seen.add(url);\n    const title = alts[i] || url.split('/').pop();\n    if (/Tips.*記事|カテゴリー/.test(title)) continue;\n    items.push({ title, url, description: 'Tips検索結果' });\n  }\n  return items;\n}\n\nfunction parseBrainHtml(html) {\n  const items = [];\n  const seen = new Set();\n  const links = [...html.matchAll(/href=\"(\\/u\\/[^\"]+\\/a\\/[^\"]+)\"/g)].map(m => `https://brain-market.com${m[1]}`);\n  for (const url of links) {\n    if (seen.has(url)) continue;\n    seen.add(url);\n    const slug = url.split('/').pop();\n    items.push({ title: `Brain教材 (${slug})`, url, price: '未詳', description: 'Brain検索結果' });\n    if (items.length >= 10) break;\n  }\n  return items;\n}\n\nlet combinedText = '=== 【超短期トレンド分析用マルチソースデータ】 ===\\n\\n';\n\n// --- 1. X (Twitter) ---\ntry {\n  let xOutput = $node['Execute Command'].all()[0]?.json?.stdout;\n  if (!xOutput) xOutput = $node['Normalize Mock X'].all()[0]?.json?.stdout;\n  if (xOutput) {\n    const parsed = JSON.parse(xOutput);\n    const tweets = Array.isArray(parsed) ? parsed : (parsed.data || []);\n    combinedText += '■ [X (Twitter) の言及・バズ] ---------\\n';\n    let count = 0;\n    for (const t of tweets) {\n      const text = t.text || '';\n      if (text && !text.includes('公式LINE') && !text.includes('プレゼント企画') && !text.includes('プロフをチェック')) {\n        const createdAt = t.createdAtISO || t.created_at || '不明';\n        const likes = t.metrics?.likes ?? t.favorite_count ?? 0;\n        const rts = t.metrics?.retweets ?? t.retweet_count ?? 0;\n        combinedText += `- [${createdAt}] Fav:${likes} / RT:${rts}\\n  内容: ${text.replace(/\\n/g, ' ')}\\n`;\n        count++;\n      }\n      if (count >= 50) break;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Xデータのパースエラー: ${e.message}\\n\\n`;\n}\n\n// --- 2. note ---\ntry {\n  const noteItems = [\n    ...$node['RSS Read (note-AI副業)'].all(),\n    ...$node['RSS Read (note-AIツール)'].all()\n  ];\n  if (noteItems.length > 0) {\n    combinedText += '■ [noteの新着・トレンド記事] ---------\\n';\n    for (const item of noteItems.slice(0, 15)) {\n      combinedText += `- タイトル: ${item.json.title}\\n  概要: ${item.json.contentSnippet || 'なし'}\\n  URL: ${item.json.link}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ noteデータ取得エラー: ${e.message}\\n\\n`;\n}\n\n// --- 3. Brain ---\ntry {\n  const brainHtml = getHtmlBody('HTTP Request (Brain)');\n  const brainItems = brainHtml ? parseBrainHtml(brainHtml) : [];\n  if (brainItems.length > 0) {\n    combinedText += '■ [Brain 実売商品・教材] ---------\\n';\n    for (const item of brainItems) {\n      combinedText += `- 教材名: ${item.title}\\n  価格: ${item.price}円\\n  URL: ${item.url}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Brainデータエラー: ${e.message}\\n\\n`;\n}\n\n// --- 4. Tips ---\ntry {\n  const tipsHtml = getHtmlBody('HTTP Request (Tips)');\n  const tipsItems = tipsHtml ? parseTipsHtml(tipsHtml) : [];\n  if (tipsItems.length > 0) {\n    combinedText += '■ [Tips 副業ノウハウ教材] ---------\\n';\n    for (const item of tipsItems) {\n      combinedText += `- 教材名: ${item.title}\\n  URL: ${item.url}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Tipsデータエラー: ${e.message}\\n\\n`;\n}\n\n// --- 5. Qiita ---\ntry {\n  const qiitaItems = $node['HTTP Request (Qiita)'].all();\n  if (qiitaItems.length > 0) {\n    combinedText += '■ [Qiita 技術実装・エラー解決] ---------\\n';\n    for (const item of qiitaItems.slice(0, 15)) {\n      combinedText += `- 記事名: ${item.json.title}\\n  LG数: ${item.json.likes_count || 0}\\n  タグ: ${(item.json.tags || []).map(t => t.name).join(', ')}\\n  URL: ${item.json.url}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Qiitaデータエラー: ${e.message}\\n\\n`;\n}\n\nreturn [{ json: { textData: combinedText } }];"
+      },
+      "id": "a1000012-0012-4012-8012-000000000012",
+      "name": "Code (Combine Sources)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.textData }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "【役割】\nあなたは最先端のAIツール、AI副業、そして自動化ワークフローを熟知し、自社サービスや有償コンテンツへの「顧客獲得（リードジェネレーション）」を最も得意とする天才マーケティングディレクターです。\n\n【入力データ】\nX（実利キーワードのバズ）、note/Brain/Tips（直近の実売需要）、Qiita（技術実装の壁）が統合された、直近3〜5日間のデータが提供されます。\n\n【タスク】\n提供されたマルチソースデータをクロス分析し、現在能動的なAI副業ユーザー、効率化を求めるビジネス層が「喉から手が出るほど欲しがっている」超短期トレンドキーワードを最大5つ抽出してください。\nさらに、それらのターゲット層を惹きつけて、自社サービスへの登録や問い合わせ（顧客獲得）を発生させるための具体的な「リード獲得用配布企画（リードマグネット）」を逆算して提案してください。\n\n【分析の軸】\n1. 何が今、副業層や効率化ビジネス層を刺激しているか？\n2. note/Brain/Tipsで「お金を払ってでも買われている形（実売）」は何か？\n3. Qiitaで「実装の段階でみんなが詰まっている壁」は何か？\n4. どのようなコンテンツを企画・配布すれば最も能動的な顧客リストが獲得できるか？"
+            }
+          ]
+        },
+        "hasOutputParser": true
+      },
+      "id": "a1000013-0013-4013-8013-000000000013",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [1340, 500]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "a1000014-0014-4014-8014-000000000014",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [1240, 720],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"trends\": [\n    {\n      \"keyword\": \"ClaudeCode\",\n      \"category\": \"開発自動化\",\n      \"market_evidence\": \"Xでバズ\",\n      \"tech_status_pain\": \"セットアップの壁\",\n      \"lead_hook\": \"無料チートシート\",\n      \"score\": \"高（即時実践推奨）\"\n    }\n  ]\n}"
+      },
+      "id": "a1000015-0015-4015-8015-000000000015",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [1440, 720]
+    },
+    {
+      "parameters": {
+        "jsCode": "const trends = $json.output?.trends || $json.trends || [];\n\nlet message = '📢 【朝刊】マルチソースAI実需分析 ＆ 顧客獲得（リード）戦略速報 📢\\n\\n';\nmessage += '直近3日間の「X(バズ)」「note/Brain/Tips(実売)」「Qiita(実装エラー)」をGeminiが横断分析しました。\\n\\n';\n\nfor (const t of trends) {\n  message += `🔥 キーワード: 【${t.keyword}】 （カテゴリ: ${t.category} / 顧客獲得価値: ${t.score}）\\n`;\n  message += `・ターゲットの実売需要: ${t.market_evidence}\\n`;\n  message += `・ターゲットの実装上の悩み: ${t.tech_status_pain}\\n`;\n  message += '💡 【顧客獲得（リード）施策案】:\\n';\n  message += `👉 『 ${t.lead_hook} 』\\n`;\n  message += '--------------------------------------------------\\n';\n}\n\nif (trends.length === 0) {\n  message += '（トレンドデータなし）\\n';\n}\n\nreturn [{ json: { text: message, trends } }];"
+      },
+      "id": "a1000016-0016-4016-8016-000000000016",
+      "name": "Code (Format Notification)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {}
+      },
+      "id": "a1000017-0017-4017-8017-000000000017",
+      "name": "Slack Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 500],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          { "node": "IF Mock X", "type": "main", "index": 0 },
+          { "node": "RSS Read (note-AI副業)", "type": "main", "index": 0 },
+          { "node": "RSS Read (note-AIツール)", "type": "main", "index": 0 },
+          { "node": "HTTP Request (Brain)", "type": "main", "index": 0 },
+          { "node": "HTTP Request (Tips)", "type": "main", "index": 0 },
+          { "node": "HTTP Request (Qiita)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "IF Mock X": {
+      "main": [
+        [{ "node": "Read Mock X", "type": "main", "index": 0 }],
+        [{ "node": "Execute Command", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Mock X": {
+      "main": [[{ "node": "Normalize Mock X", "type": "main", "index": 0 }]]
+    },
+    "Normalize Mock X": {
+      "main": [[{ "node": "Merge All Sources", "type": "main", "index": 0 }]]
+    },
+    "Execute Command": {
+      "main": [[{ "node": "Merge All Sources", "type": "main", "index": 0 }]]
+    },
+    "RSS Read (note-AI副業)": {
+      "main": [[{ "node": "Merge All Sources", "type": "main", "index": 1 }]]
+    },
+    "RSS Read (note-AIツール)": {
+      "main": [[{ "node": "Merge All Sources", "type": "main", "index": 2 }]]
+    },
+    "HTTP Request (Brain)": {
+      "main": [[{ "node": "Merge All Sources", "type": "main", "index": 3 }]]
+    },
+    "HTTP Request (Tips)": {
+      "main": [[{ "node": "Merge All Sources", "type": "main", "index": 4 }]]
+    },
+    "HTTP Request (Qiita)": {
+      "main": [[{ "node": "Merge All Sources", "type": "main", "index": 5 }]]
+    },
+    "Merge All Sources": {
+      "main": [[{ "node": "Code (Combine Sources)", "type": "main", "index": 0 }]]
+    },
+    "Code (Combine Sources)": {
+      "main": [[{ "node": "Basic LLM Chain", "type": "main", "index": 0 }]]
+    },
+    "Basic LLM Chain": {
+      "main": [[{ "node": "Code (Format Notification)", "type": "main", "index": 0 }]]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [[{ "node": "Basic LLM Chain", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [[{ "node": "Basic LLM Chain", "type": "ai_outputParser", "index": 0 }]]
+    },
+    "Code (Format Notification)": {
+      "main": [[{ "node": "Slack Notification", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Tokyo"
+  },
+  "staticData": null,
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

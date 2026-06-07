@@ -1,0 +1,54 @@
+{
+  "name": "エラーハンドラ（Cookie切れアラート）",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b2000001-0001-4001-8001-000000000001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const execution = $json.execution || {};\nconst error = execution.error || {};\nconst message = error.message || '不明なエラー';\nconst url = execution.url || '';\nconst workflow = execution.workflow?.name || '不明なワークフロー';\n\nconst isCookieError = /twitter|auth|cookie|login|401|403/i.test(message);\n\nlet text = `🚨 *n8n ワークフローエラー*\\n`;\ntext += `ワークフロー: ${workflow}\\n`;\ntext += `エラー: ${message}\\n`;\nif (url) text += `実行URL: ${url}\\n`;\n\nif (isCookieError) {\n  text += '\\n⚠️ *X Cookie の再設定が必要な可能性があります*\\n';\n  text += '手順:\\n';\n  text += '1. ブラウザで X にログイン → DevTools → Cookies → auth_token と ct0 を取得\\n';\n  text += '2. ホストで `twitter login` を実行（Cookie再設定）\\n';\n  text += '3. data/twitter-cli/ に認証ファイルが反映されていることを確認\\n';\n}\n\nreturn [{ json: { text } }];"
+      },
+      "id": "b2000002-0002-4002-8002-000000000002",
+      "name": "Code (Format Error)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {}
+      },
+      "id": "b2000003-0003-4003-8003-000000000003",
+      "name": "Slack Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [[{ "node": "Code (Format Error)", "type": "main", "index": 0 }]]
+    },
+    "Code (Format Error)": {
+      "main": [[{ "node": "Slack Error Alert", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Tokyo"
+  },
+  "staticData": null,
+  "tags": [],
+  "meta": {}
+}

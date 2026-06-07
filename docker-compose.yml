@@ -1,0 +1,40 @@
+services:
+  n8n:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=${N8N_PORT:-5678}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Asia/Tokyo}
+      - TZ=${TZ:-Asia/Tokyo}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=${N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS:-true}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
+      - NODES_EXCLUDE=${NODES_EXCLUDE:-[]}
+      - USE_MOCK_X=${USE_MOCK_X:-true}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - QIITA_ACCESS_TOKEN=${QIITA_ACCESS_TOKEN:-}
+      - TWITTER_AUTH_TOKEN=${TWITTER_AUTH_TOKEN:-}
+      - TWITTER_CT0=${TWITTER_CT0:-}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./data/twitter-cli:/home/node/.cache/twitter-cli
+      - ./mock:/data/mock:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  n8n_data:
