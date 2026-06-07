@@ -1,140 +1,87 @@
 # n8n AIトレンド抽出・リード獲得システム
 
-X / note / Brain / Tips / Qiita の5ソースから超短期AIトレンドを収集し、Gemini 2.5 Flash で顧客獲得（リードマグネット）視点の分析を行い、Slack へ朝刊速報を配信する n8n ワークフローです。
+X / note / Brain / Tips / Qiita の5ソースから超短期 AI トレンドを自動収集し、Gemini で顧客獲得（リードマグネット）視点の分析を行い、Discord 等へ朝刊速報を配信する **Docker + n8n** ワークフローです。
+
+## 特徴
+
+- **5ソース並列収集**: X（twitter-cli）、note RSS、Brain/Tips 検索、Qiita API
+- **Gemini 分析**: トレンド抽出 + リードマグネット施策案を JSON 構造化
+- **毎朝自動実行**: Schedule Trigger（07:00 JST）
+- **モックモード**: X API を使わずに E2E テスト可能
+- **セルフホスト**: Cookie やプロンプトを外部に漏らさない
 
 ## クイックスタート
 
-### 1. 環境変数の準備
-
 ```bash
+git clone <repository-url>
+cd n8n-ai-trend-extractor
 cp .env.example .env
-# .env を編集: GEMINI_API_KEY, SLACK_WEBHOOK_URL 等を設定
-```
+# .env を編集
 
-### 2. n8n 起動
-
-```bash
 docker compose up -d --build
 open http://localhost:5678
 ```
 
-初回アクセス時にオーナーアカウントを作成してください。
-
-### 3. ワークフローのインポート
-
-1. n8n GUI → **Workflows** → **Import from File**
+1. n8n でオーナーアカウントを作成
 2. `workflows/ai-trend-extractor.json` をインポート
-3. `workflows/error-handler.json` をインポート（エラー通知用）
+3. Gemini Credential を設定
+4. Test workflow で動作確認
 
-### 4. Credentials の設定
+詳細は **[セットアップマニュアル](docs/setup.md)** を参照してください。
 
-| Credential | 種類 | 設定内容 |
-|------------|------|----------|
-| Google Gemini API | Google Gemini(PaLM) API | Google AI Studio の API キー |
+## ドキュメント
 
-インポート後、**Basic LLM Chain** 配下の **Google Gemini Chat Model** ノードで Credential を選択してください。
+| ドキュメント | 内容 |
+|-------------|------|
+| [docs/README.md](docs/README.md) | ドキュメント索引 |
+| [セットアップマニュアル](docs/setup.md) | 初回構築手順 |
+| [ワークフロー解説・カスタマイズ](docs/workflow-guide.md) | ノード解説・キーワード・プロンプト変更 |
+| [運用マニュアル](docs/operations.md) | 日常運用・調整・チューニング |
+| [設定リファレンス](docs/configuration.md) | 環境変数・Credentials |
+| [アーキテクチャ](docs/architecture.md) | システム構成・データフロー |
+| [トラブルシューティング](docs/troubleshooting.md) | よくあるエラーと対処 |
+| [FAQ](docs/faq.md) | よくある質問 |
 
-### 5. 動作確認（モックモード）
-
-`.env` で `USE_MOCK_X=true`（デフォルト）の状態で、ワークフローを手動実行します。X API を叩かずに E2E テストが可能です。
-
-本番 X 収集に切り替える場合:
-
-```bash
-# .env
-USE_MOCK_X=false
-```
-
-あわせて [twitter-cli 認証](#twitter-cli-認証) を完了してください。
+設計資料（開発者向け）: `specs/` ディレクトリ
 
 ## ディレクトリ構成
 
 ```
-├── docker/
-│   └── Dockerfile              # n8n + twitter-cli
+n8n-ai-trend-extractor/
+├── docker/                  # Dockerfile（n8n + twitter-cli）
 ├── docker-compose.yml
-├── .env.example
-├── workflows/
-│   ├── ai-trend-extractor.json # メインワークフロー
-│   └── error-handler.json      # エラー通知
-├── mock/
-│   └── x-tweets-sample.json    # テスト用 X データ
-├── scripts/
-│   ├── setup-twitter-cli.sh
-│   └── verify-sources.sh
-├── data/twitter-cli/           # Cookie 認証情報（git 除外）
-└── specs/                      # 設計書・仕様書
+├── workflows/               # n8n ワークフロー JSON
+├── mock/                    # テスト用 X データ
+├── scripts/                 # 疎通確認・セットアップ補助
+├── docs/                    # ユーザー向けドキュメント
+├── specs/                   # 設計書・仕様書
+└── data/twitter-cli/        # Cookie キャッシュ（git 除外）
 ```
 
-## twitter-cli 認証
+## 必要なもの
 
-twitter-cli は **Python 版**（PyPI: `twitter-cli`）を使用します。
-
-```bash
-chmod +x scripts/setup-twitter-cli.sh
-./scripts/setup-twitter-cli.sh
-```
-
-1. ブラウザで X にログイン
-2. DevTools → Application → Cookies → `auth_token` と `ct0` を取得
-3. `.env` に `TWITTER_AUTH_TOKEN` と `TWITTER_CT0` を設定
-4. Cookie キャッシュは `data/twitter-cli/` に保存され、コンテナと共有されます
-
-コンテナ内での確認:
-
-```bash
-docker compose exec n8n twitter search "Dify" --json
-```
-
-## データソース疎通確認
-
-```bash
-chmod +x scripts/verify-sources.sh
-./scripts/verify-sources.sh
-```
-
-## 運用コマンド
-
-```bash
-# ログ確認
-docker compose logs -f n8n
-
-# 再起動
-docker compose restart n8n
-
-# 停止
-docker compose down
-
-# イメージ再ビルド
-docker compose build --no-cache && docker compose up -d
-```
+| 項目 | 必須 |
+|------|------|
+| Docker + Compose v2 | ✅ |
+| Google Gemini API キー | ✅ |
+| X Cookie（本番 X 時） | ✅ |
+| Discord Webhook（通知時） | 推奨 |
 
 ## ワークフロー概要
 
 ```
-Schedule Trigger (毎朝 07:00 JST)
-  ├─ IF Mock X → Read Mock / Execute Command (twitter-cli)
-  ├─ RSS Read (note-AI副業)
-  ├─ RSS Read (note-AIツール)
-  ├─ HTTP Request (Brain)  ※検索ページ HTML をパース
-  ├─ HTTP Request (Tips)   ※検索ページ HTML をパース
-  └─ HTTP Request (Qiita)
-        ↓
-  Merge All Sources (6入力)
-        ↓
-  Code (Combine Sources)
-        ↓
-  Basic LLM Chain (Gemini 2.5 Flash)
-        ↓
-  Code (Format Notification)
-        ↓
-  Slack Notification
+Schedule (07:00 JST) → 5ソース収集 → Merge → Code 統合
+  → Gemini LLM Chain → 通知整形 → Discord
 ```
 
-## 注意事項
+## ライセンス
 
-- **Brain API** (`/api/v1/search`) は 404 のため、検索ページ HTML からリンクを抽出しています
-- **X Cookie** は定期的に失効します。`error-handler` ワークフローで Slack 通知されます
-- **Qiita トークン** は任意です（未設定でも公開 API で動作、レートリミットあり）
-- 仕様書: `specs/AIトレンド抽出システム構築仕様書.md`
-- 構築タスク: `specs/構築タスク一覧_Docker版.md`
+[MIT License](LICENSE)
+
+## セキュリティ
+
+秘密情報の取り扱いについては [SECURITY.md](SECURITY.md) を参照してください。
+
+## コントリビューション
+
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。

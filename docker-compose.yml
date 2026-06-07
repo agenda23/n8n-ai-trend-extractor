@@ -28,7 +28,7 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./data/twitter-cli:/home/node/.cache/twitter-cli
-      - ./mock:/data/mock:ro
+      - ./mock:/home/node/.n8n-files/mock:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
       interval: 30s

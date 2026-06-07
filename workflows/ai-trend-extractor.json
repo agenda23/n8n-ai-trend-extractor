@@ -50,7 +50,7 @@
     {
       "parameters": {
         "operation": "read",
-        "fileSelector": "/data/mock/x-tweets-sample.json",
+        "fileSelector": "/home/node/.n8n-files/mock/x-tweets-sample.json",
         "options": {}
       },
       "id": "a1000003-0003-4003-8003-000000000003",
