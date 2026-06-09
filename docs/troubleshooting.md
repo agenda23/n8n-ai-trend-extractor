@@ -2,6 +2,21 @@
 
 ## エラー一覧
 
+### n8n: secure cookie エラー（Safari / HTTP アクセス）
+
+**症状**: `Your n8n server is configured to use a secure cookie...`
+
+**原因**: n8n はデフォルトで Secure Cookie を使うため、HTTP や Safari からのアクセスでログインできない
+
+**対処**（優先順）:
+
+1. **URL を `http://localhost:5678` にする**（`127.0.0.1` や LAN IP ではなく `localhost`）
+2. **Safari 以外のブラウザ**（Chrome / Firefox 等）を試す
+3. ローカル HTTP 開発の場合、`.env` に `N8N_SECURE_COOKIE=false` を設定し `docker compose restart n8n`
+4. 本番運用では **HTTPS（TLS）** を設定し `N8N_SECURE_COOKIE=true` を維持する
+
+---
+
 ### Read Mock X: Access to the file is not allowed
 
 **症状**: `Allowed paths: /home/node/.n8n-files`

@@ -11,6 +11,7 @@
 | `N8N_HOST` | `localhost` | n8n ホスト名 |
 | `N8N_PORT` | `5678` | n8n ポート |
 | `N8N_PROTOCOL` | `http` | プロトコル |
+| `N8N_SECURE_COOKIE` | `false` | セキュア Cookie（HTTP ローカルでは `false`、HTTPS 本番では `true` 推奨） |
 | `GENERIC_TIMEZONE` | `Asia/Tokyo` | スケジュールのタイムゾーン |
 | `TZ` | `Asia/Tokyo` | コンテナのシステム TZ |
 
