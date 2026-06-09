@@ -51,7 +51,7 @@ docker compose exec n8n twitter search "Dify" --json --max 1
 - **Python twitter-cli** — PyPI 版（npm `@public-clis/twitter-cli` は存在しない）
 - **Cookie via `.env`** — `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`
 - **Merge node required** — 6入力 combineAll → Code
-- **`$node["名前"].all()`** — n8n 2.x 構文（`$items()` 廃止）
+- **`$('ノード名').all()`** — n8n 2.x 構文（`$node` / `$items()` 廃止）
 - **Notification via Code node** — Handlebars 非対応
 - **Mock path** — `/home/node/.n8n-files/`（n8n 2.x ファイル制限）
 
