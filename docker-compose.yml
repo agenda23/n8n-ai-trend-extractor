@@ -1,9 +1,32 @@
 services:
+  x-trends:
+    build:
+      context: ./docker
+      dockerfile: x-trends.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3920:3920"
+    environment:
+      - TWITTER_AUTH_TOKEN=${TWITTER_AUTH_TOKEN:-}
+      - API_KEY=${X_TRENDS_API_KEY:-}
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3920/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
   n8n:
     build:
       context: ./docker
       dockerfile: Dockerfile
     restart: unless-stopped
+    depends_on:
+      x-trends:
+        condition: service_healthy
     ports:
       - "5678:5678"
     environment:
@@ -17,19 +40,19 @@ services:
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
       - NODES_EXCLUDE=${NODES_EXCLUDE:-[]}
       - USE_MOCK_X=${USE_MOCK_X:-true}
+      - X_TRENDS_BASE_URL=${X_TRENDS_BASE_URL:-http://x-trends:3920}
+      - X_TRENDS_API_KEY=${X_TRENDS_API_KEY:-}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
       - QIITA_ACCESS_TOKEN=${QIITA_ACCESS_TOKEN:-}
-      - TWITTER_AUTH_TOKEN=${TWITTER_AUTH_TOKEN:-}
-      - TWITTER_CT0=${TWITTER_CT0:-}
       - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
     env_file:
       - path: .env
         required: false
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./data/twitter-cli:/home/node/.cache/twitter-cli
       - ./mock:/home/node/.n8n-files/mock:ro
+      - ./config:/home/node/.n8n-files/config:rw
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
       interval: 30s

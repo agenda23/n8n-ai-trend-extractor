@@ -1,0 +1,166 @@
+{
+  "updatedAt": "2026-06-10T00:48:07.766Z",
+  "version": 1,
+  "active": [
+    "Fable",
+    "Midjourney",
+    "Pictory",
+    "Mythos",
+    "Sora",
+    "Sonnet",
+    "Haiku",
+    "Flash",
+    "mini"
+  ],
+  "emerging": [
+    "Etsy",
+    "SUZURI",
+    "Codex",
+    "Mistral",
+    "Agent"
+  ],
+  "retire": [],
+  "rationale": "Fable, Midjourney, Pictory, Mythos, Sora, Sonnet, Haiku, Flash, mini は複数ソースまたは高スコアのため active に継続。Etsy, SUZURI, Codex, Mistral, Agent は新規または低スコアのため emerging に追加。",
+  "mechanicalTop": [
+    {
+      "name": "Fable",
+      "score": 4,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Midjourney",
+      "score": 4,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Pictory",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Mythos",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Flash",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "mini",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Haiku",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Agent",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Sora",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Sonnet",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Opus",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "context",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Etsy",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "SUZURI",
+      "score": 2,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "quot",
+      "score": 2,
+      "sources": [
+        "tips"
+      ]
+    },
+    {
+      "name": "LLMO",
+      "score": 1,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "VTuber",
+      "score": 1,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "note1",
+      "score": 1,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Codex",
+      "score": 1,
+      "sources": [
+        "note"
+      ]
+    },
+    {
+      "name": "Typeless",
+      "score": 1,
+      "sources": [
+        "note"
+      ]
+    }
+  ]
+}

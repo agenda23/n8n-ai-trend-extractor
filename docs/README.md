@@ -12,6 +12,8 @@ n8n AIトレンド抽出・リード獲得システムのユーザー向けド�
 | [運用マニュアル](./operations.md) | 日常運用・調整・チューニング | 運用担当者 |
 | [設定リファレンス](./configuration.md) | 環境変数・Credentials の一覧 | 全員 |
 | [アーキテクチャ](./architecture.md) | システム構成・データフロー | 開発者・運用者 |
+| [動的ウォッチリスト戦略](./watchlist-strategy.md) | 固定リスト廃止・週次 watchlist 設計 | 運用担当者 |
+| [改善方針ロードマップ](./improvement-roadmap.md) | 品質改善・拡張の優先順位 | 運用担当者 |
 | [トラブルシューティング](./troubleshooting.md) | よくあるエラーと対処法 | 全員 |
 | [FAQ](./faq.md) | よくある質問 | 全員 |
 

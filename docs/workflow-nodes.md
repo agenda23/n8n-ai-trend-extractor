@@ -7,7 +7,7 @@
 | n8n ワークフロー ID | `axXa37Sq1YQQbIYj` |
 | 最終更新（n8n） | `2026-06-09T00:18:18Z` |
 | 状態 | active |
-| 一括更新スクリプト | `scripts/update-workflow-precision.py` |
+| 一括更新スクリプト | `scripts/build-watchlist-workflows.py` |
 
 ---
 
@@ -16,7 +16,7 @@
 | 層 | 役割 |
 |----|------|
 | **収集ノード** | X / note / Brain / Tips / Qiita を並列取得 |
-| **Code (Combine Sources)** | **データ整形のみ**。中立シグナルを LLM 向けテキストに統合 |
+| **Code (Combine Sources)** | **データ整形のみ**。生データ + 参考（watchlist / x-trends）を LLM 向けテキストに統合 |
 | **LLM (Gemini)** | **候補選定 + 全体分析**。ルーブリックに従い判断 |
 | **Code (Format Notification)** | Discord 向け整形。抽象語除外・定番最大1件・2000字分割 |
 | **Discord** | Webhook POST（複数パート対応） |
@@ -31,12 +31,13 @@
 Schedule Trigger（毎朝 07:00 JST）
   │
   ├─ IF Mock X ─┬─ true  → Read Mock X → Normalize Mock X ──┐
-  │             └─ false → Execute Command (twitter-cli) ────┤
+  │             └─ false → HTTP Request (X Trends) → Normalize X Trends ─┤
   ├─ RSS Read (note-AI副業) ─────────────────────────────────┤
   ├─ RSS Read (note-AIツール) ───────────────────────────────┤
   ├─ HTTP Request (Brain) ─────────────────────────────────────┤
   ├─ HTTP Request (Tips) ──────────────────────────────────────┤
-  └─ HTTP Request (Qiita) ─────────────────────────────────────┤
+  ├─ HTTP Request (Qiita) ─────────────────────────────────────┤
+  └─ Read Watchlist（参考・continueOnFail）──────────────────────┤
                                                               ↓
                                             Merge All Sources（6入力）
                                                               ↓
@@ -53,9 +54,11 @@ Schedule Trigger（毎朝 07:00 JST）
 
 **3段階の処理:**
 
-1. **収集** — 5ソースを並列取得（X は本番 or モック）
-2. **分析** — Gemini が `candidates[]`（最大10件・根拠弱ければ2〜3件）と `overall_analysis` を JSON 化
+1. **収集** — 5ソース + watchlist 参考を並列取得（X は本番 or モック）
+2. **分析** — Gemini が `candidates[]`（根拠弱ければ2〜3件）と `overall_analysis` を JSON 化。**固定 TOOL_PATTERNS は廃止**
 3. **配信** — Discord 朝刊テキストに整形（2000文字超は `[1/N]` 付きで自動分割）
+
+> 週次 **Watchlist Generator**（`workflows/watchlist-generator.json`）の解説は [動的ウォッチリスト戦略](./watchlist-strategy.md) を参照。
 
 ---
 
@@ -65,10 +68,11 @@ Schedule Trigger（毎朝 07:00 JST）
 |------|----------|
 | タイムゾーン | `.env` の `GENERIC_TIMEZONE=Asia/Tokyo` |
 | X モック切替 | `.env` の `USE_MOCK_X`（`true` / `false`） |
-| X 認証 | `.env` の `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` |
+| X 認証 | `.env` の `TWITTER_AUTH_TOKEN`（x-trends サービスへ渡される） |
 | Qiita 認証 | `.env` の `QIITA_ACCESS_TOKEN`（任意） |
 | Gemini | n8n Credentials `Google Gemini(PaLM) Api account` |
-| モックファイル | ホスト `mock/x-tweets-sample.json` → コンテナ `/home/node/.n8n-files/mock/` |
+| モックファイル | ホスト `mock/x-trends-sample.json` → コンテナ `/home/node/.n8n-files/mock/` |
+| watchlist | ホスト `config/watchlist.json` → コンテナ `/home/node/.n8n-files/config/watchlist.json` |
 
 `.env` 変更後は `docker compose restart n8n` が必要です。
 
@@ -102,9 +106,9 @@ Schedule Trigger（毎朝 07:00 JST）
 | 分岐 | 接続先 |
 |------|--------|
 | **true** | Read Mock X |
-| **false** | Execute Command |
+| **false** | HTTP Request (X Trends) |
 
-**役割:** 本番（twitter-cli）とモック（ローカル JSON）を切り替えます。開発・検証時は `USE_MOCK_X=true` を推奨します。
+**役割:** 本番（x-trends HTTP API）とモック（ローカル JSON）を切り替えます。開発・検証時は `USE_MOCK_X=true` を推奨します。
 
 ---
 
@@ -113,7 +117,7 @@ Schedule Trigger（毎朝 07:00 JST）
 | 項目 | 設定値 |
 |------|--------|
 | 種類 | Read/Write Files from Disk |
-| ファイルパス | `/home/node/.n8n-files/mock/x-tweets-sample.json` |
+| ファイルパス | `/home/node/.n8n-files/mock/x-trends-sample.json` |
 
 **役割:** モック用 X ツイート JSON を読み込みます。n8n 2.x のファイル制限により `.n8n-files` 配下のみ有効です。
 
@@ -132,41 +136,37 @@ Schedule Trigger（毎朝 07:00 JST）
 | 種類 | Code |
 | 出力 | `{ stdout: "<JSON文字列>" }` |
 
-**役割:** Read Mock X の出力を Execute Command と同じ `stdout` 形式に正規化します。Combine Sources が本番・モックを同一ロジックで処理できます。
+**役割:** Read Mock X の出力を Normalize X Trends と同じ `stdout` 形式に正規化します。Combine Sources が本番・モックを同一ロジックで処理できます。
 
 ---
 
-### 5. Execute Command
+### 5. HTTP Request (X Trends)
 
 | 項目 | 設定値 |
 |------|--------|
-| 種類 | Execute Command |
-| Continue On Fail | **有効**（X 失敗時もワークフロー継続） |
+| 種類 | HTTP Request |
+| URL | `{{ $env.X_TRENDS_BASE_URL }}/api/v1/trends` |
+| Continue On Fail | **有効** |
 
-**コマンド（先頭 `=` で n8n 式評価）:**
+**Query パラメータ:**
 
-```
-=twitter search 'Dify OR n8n OR Manus OR OpenClaw OR Windsurf OR Bolt OR Lovable OR ComfyUI OR "v0.dev" OR "Gemini CLI" OR Make.com OR Zapier OR Devin OR Magnific OR 知らないと損 OR 神ワザ OR 爆速 OR 新ツール OR 初公開' --since {{ $today.minus({ days: 3 }).toISODate() }} --until {{ $today.plus({ days: 1 }).toISODate() }} --min-likes 5 --json
-```
+| パラメータ | 値 |
+|------------|-----|
+| `preset` | `japan` |
+| `count` | `50` |
 
-| パラメータ | 意味 |
-|------------|------|
-| 検索語 | ニッチ・新興ツール名 + バズ系日本語キーワードを OR 結合 |
-| `--since` / `--until` | 直近 3 日間（実行日基準） |
-| `--min-likes 5` | いいね 5 未満の投稿を除外 |
-| `--json` | twitter-cli の JSON 出力 |
+**役割:** x-trends から日本の Explore トレンド一覧を**生データのまま**取得。キーワードフィルタは行わない。
 
-**設計意図:** Claude Code / Cursor / MCP は検索語から除外し、ニッチ・新興ツールの投稿収集を優先します（定番ツールの言及は生投稿・note 等から LLM が判断）。
+---
 
-**出力:** `stdout` に twitter-cli の JSON（`{ ok, data: [...] }` 形式）
+### 6. Normalize X Trends
 
-**注意:** コマンド先頭の `=` がないと日付式が展開されずシェルエラーになります。
+| 項目 | 設定値 |
+|------|--------|
+| 種類 | Code |
+| 出力 | `{ stdout: "<JSON文字列>" }` |
 
-**カスタマイズ例:**
-
-- 監視ツール追加: OR 句にツール名を追加（Combine Sources の `TOOL_PATTERNS` も合わせて更新）
-- 閾値緩和: `--min-likes 3`
-- 期間変更: `days: 3` → `days: 5`
+**役割:** x-trends レスポンス `{ ok, data: { trends: [...] } }` を stdout に格納。意味フィルタは行わない（抽出は Combine Sources / LLM）。
 
 ---
 
@@ -244,7 +244,7 @@ Schedule Trigger（毎朝 07:00 JST）
 
 | Input | 接続元 |
 |-------|--------|
-| 0 | Normalize Mock X **または** Execute Command |
+| 0 | Normalize Mock X **または** Normalize X Trends |
 | 1 | RSS Read (note-AI副業) |
 | 2 | （未使用 — note-AIツール は Code 側で `$()` 参照） |
 | 3〜5 | Brain / Tips / Qiita |
@@ -258,60 +258,48 @@ Schedule Trigger（毎朝 07:00 JST）
 | 項目 | 設定値 |
 |------|--------|
 | 種類 | Code |
-| 出力 | `{ textData, buzzCandidates }` |
+| 出力 | `{ textData }` |
 
-**役割:** 5 ソースの生データを Gemini 向けプレーンテキスト（`textData`）に統合します。**候補選定は行いません。**
-
-#### TOOL_PATTERNS（監視ツール 16 種）
-
-MCP は含めません（抽象プロトコル名のため）。
-
-| ツール名 | 検出パターン概要 |
-|----------|------------------|
-| Dify, n8n, Manus, OpenClaw | 単語境界マッチ |
-| Windsurf, Lovable, ComfyUI, Devin, Magnific | 同上 |
-| Bolt | `bolt.new` |
-| v0 | `v0.dev` / `v0 dev` |
-| Gemini CLI | `gemini cli` |
-| Make | `make.com` |
-| Zapier | `zapier` |
-| Claude Code, Cursor | 定番ツール（検出のみ、選定は LLM） |
+**役割:** 5 ソースの生データと参考値（watchlist / x-trends）を Gemini 向けプレーンテキスト（`textData`）に統合します。**候補選定は行いません**（固定 `TOOL_PATTERNS` は廃止済み）。
 
 #### 主要ロジック
 
-1. **X ツール言及シグナル** — `rankScore = 最高Eng + 言及×12` でソート（倍率・フィルタなし）
-2. **X 生投稿** — エンゲージ上位 30 件
-3. **note / Qiita** — タイトルからツール名カウント
+1. **本命データ** — note / Brain / Tips / Qiita の生タイトル・記事（候補選定の主根拠）
+2. **参考データ（watchlist）** — `Read Watchlist` で読んだ `config/watchlist.json` の active / emerging / retire
+3. **参考データ（x-trends）** — 日本 Explore 全体トレンド（カテゴリ非限定）。候補選定の直接根拠にしない
 4. **Brain / Tips** — HTML から教材タイトル・URL 抽出
-5. **マルチソース言及カウント** — X / note / Qiita を横断し、裏付けソース数を付与（ルーブリック1用）
-6. **代替候補** — X が空のとき note/Qiita から補完
 
 #### textData セクション構成
 
 ```
 === 【超短期トレンド分析用マルチソースデータ】 ===
-※ Codeは中立データのみ提供。候補選定はLLMがルーブリックで実施。
-※ 監視ツール（TOOL_PATTERNS）: Dify, n8n, Manus, ...
-※ 上記以外の初出固有名詞は「X生投稿」から積極探索すること。
+※ 候補選定の主根拠: note/Brain/Tips/Qiita 生データ
+※ watchlist / x-trends は参考値のみ
 
-■ [Xツール言及シグナル（参考データ）]
-■ [X (Twitter) 生投稿（上位30件）]
-■ [noteで検出された具体ツール名]
+=== 【本命データ — 候補選定の主根拠】 ===
 ■ [note新着記事（タイトルのみ）]
 ■ [Brain 教材タイトル]
 ■ [Tips 教材タイトル]
-■ [Qiitaで検出された具体ツール名]
 ■ [Qiita 技術記事]
-■ [マルチソース言及カウント（選定参考）]   ← X 空でなければ出力
-■ [代替バズ候補（X未取得時）]               ← X 空のときのみ
+
+=== 【参考データ — 週次ウォッチリスト（非本命）】 ===
+■ active / emerging / retire / rationale
+
+=== 【参考データ — X Explore 全体トレンド（非限定）】 ===
+■ [X (Twitter) トレンド一覧（参考）]
 ```
 
-**マルチソース言及カウントの例:**
+---
 
-```
-- Dify: X6 / note2 / Qiita1 | 裏付けソース:3 (X+note+Qiita)
-- OpenClaw: X3 / note1 / Qiita0 | 裏付けソース:2 (X+note)
-```
+### 12b. Read Watchlist
+
+| 項目 | 設定値 |
+|------|--------|
+| 種類 | Read/Write Files from Disk |
+| ファイル | `/home/node/.n8n-files/config/watchlist.json` |
+| continueOnFail | `true` |
+
+**役割:** 週次 Watchlist Generator が更新した JSON を読み込みます。未生成時は Combine Sources が「未生成」メッセージを出します。Merge には接続せず、Combine が `$('Read Watchlist').all()` で直接参照します。
 
 ---
 
@@ -328,10 +316,10 @@ MCP は含めません（抽象プロトコル名のため）。
 
 | # | 基準 |
 |---|------|
-| 1 | **複数ソース（X + note/Qiita）で裏付けがあるものを最優先**（マルチソース言及カウントの裏付けソース数参照） |
+| 1 | **本命データ内で複数ソース（note + Qiita 等）に現れる固有名詞を最優先** |
 | 2 | **定番（Claude Code, Cursor, ChatGPT）は最大1件**。それ以外はニッチ・新興を優先 |
-| 3 | **抽象語は候補不可**: MCP, 生成AI, AI副業, ChatGPT, ノーコード, 効率化, AI画像生成 など |
-| 4 | **TOOL_PATTERNS 外の初出固有名詞**は X 生投稿から積極採用 |
+| 3 | **抽象語は候補不可**: MCP, 生成AI, AI副業, ノーコード, 効率化 など |
+| 4 | **本命データに根拠がある初出固有名詞**を積極採用。**watchlist / X参考のみ**は不可 |
 | 5 | **根拠が弱いものは省略可**（2〜3件でも可。無理に10件埋めない） |
 
 #### 出力形式
@@ -451,11 +439,11 @@ MCP は含めません（抽象プロトコル名のため）。
 ## データフロー（JSON）
 
 ```
-Execute Command / Normalize Mock X
+Normalize X Trends / Normalize Mock X
   → { stdout: "..." }
        ↓
 Code (Combine Sources)
-  → { textData: "...", buzzCandidates: ["OpenClaw", "Dify", ...] }
+  → { textData: "..." }
        ↓
 Basic LLM Chain (Gemini)
   → { output: { candidates: [...], overall_analysis: "..." } }
@@ -474,10 +462,14 @@ Discord
 ノード設定を一括反映する場合:
 
 ```bash
-# n8n API へ PUT（Combine / LLM / Format / Execute Command / Qiita 等）
-python3 scripts/update-workflow-precision.py
+# 日次 + 週次 WF をリポジトリ JSON から再生成
+python3 scripts/build-watchlist-workflows.py
 
-# リポジトリ JSON を同期
+# n8n へインポート
+docker compose exec -T n8n n8n import:workflow --input=/dev/stdin < workflows/ai-trend-extractor.json
+docker compose exec -T n8n n8n import:workflow --input=/dev/stdin < workflows/watchlist-generator.json
+
+# リポジトリ JSON を n8n から同期（任意）
 docker compose exec -T n8n n8n export:workflow --id=axXa37Sq1YQQbIYj --pretty > workflows/ai-trend-extractor.json
 ```
 
@@ -487,11 +479,10 @@ docker compose exec -T n8n n8n export:workflow --id=axXa37Sq1YQQbIYj --pretty > 
 
 | 目的 | 変更箇所 | 内容 |
 |------|----------|------|
-| 監視ツール追加 | Execute Command + `TOOL_PATTERNS` | 検索 OR 句と正規表現を追加 |
-| 選定基準変更 | Basic LLM Chain プロンプト | ルーブリックを編集（`update-workflow-precision.py` 推奨） |
-| 候補件数・分析長 | LLM プロンプト + Format Notification | `最大10件` / `overall_analysis 800字` を調整 |
-| バズ閾値 | Execute Command | `--min-likes` の値 |
-| 分析期間 | Execute Command, Qiita URL | `days: 3` の数値 |
+| ウォッチリスト戦略 | [watchlist-strategy.md](./watchlist-strategy.md) | 週次 active/emerging/retire の設計 |
+| 選定基準変更 | Basic LLM Chain プロンプト | ルーブリックを編集（`build-watchlist-workflows.py` 推奨） |
+| 候補件数・分析長 | LLM プロンプト + Format Notification | `overall_analysis 800字` を調整 |
+| 分析期間 | Qiita URL | `days: 3`（日次）/ `days: 7`（週次） |
 | 通知先 | Discord ノード | Webhook URL |
 | ローカルテスト | `.env` | `USE_MOCK_X=true` |
 
@@ -501,9 +492,11 @@ docker compose exec -T n8n n8n export:workflow --id=axXa37Sq1YQQbIYj --pretty > 
 
 | ファイル | 内容 |
 |----------|------|
-| `workflows/ai-trend-extractor.json` | ワークフロー定義（バージョン管理用） |
-| `scripts/update-workflow-precision.py` | ノード一括更新スクリプト（正の設定ソース） |
-| `mock/x-tweets-sample.json` | X モックデータ |
+| `workflows/ai-trend-extractor.json` | 日次ワークフロー定義 |
+| `workflows/watchlist-generator.json` | 週次 watchlist 更新 WF |
+| `config/watchlist.json` | 動的ウォッチリスト（週次更新） |
+| `scripts/build-watchlist-workflows.py` | 日次 + 週次 WF ビルドスクリプト |
+| `mock/x-trends-sample.json` | X トレンドモックデータ |
 | [operations.md](./operations.md) | 日常運用 |
 | [troubleshooting.md](./troubleshooting.md) | 障害対応 |
 | [workflow-guide.md](./workflow-guide.md) | 旧カスタマイズガイド（一部内容は本ドキュメントに統合済み） |
@@ -516,6 +509,7 @@ docker compose exec -T n8n n8n export:workflow --id=axXa37Sq1YQQbIYj --pretty > 
 |------|----------|
 | 2026-06-09 午前 | ビッグワード対策: X 検索から Claude Code / Cursor / MCP 除外、ニッチツール中心に |
 | 2026-06-09 午後 | 出力形式を `candidates[]` + `overall_analysis` に変更（候補ごと分析を廃止） |
-| 2026-06-09 夕方 | 選定ルーブリックを LLM に委譲。Combine Sources はデータ整形のみ。マルチソース言及カウント追加 |
+| 2026-06-09 夕方 | 選定ルーブリックを LLM に委譲。Combine Sources はデータ整形のみ |
+| 2026-06-10 | 固定 TOOL_PATTERNS 廃止。週次 Watchlist Generator + 日次参考枠を導入 |
 
-**今後の改善候補:** 前週比言及増加率、全体分析の文字数自動トリム、Discord Webhook の環境変数化
+**今後の改善候補:** [改善方針ロードマップ](./improvement-roadmap.md)（watchlist ノイズ除去、Qiita query 簡素化、Discord env 化 等）

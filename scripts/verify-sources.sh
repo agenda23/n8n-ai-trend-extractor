@@ -39,20 +39,23 @@ else
   check "Qiita API (公開)" "https://qiita.com/api/v2/items?query=tag:AI&per_page=3"
 fi
 
+X_TRENDS_URL="${X_TRENDS_BASE_URL:-http://localhost:3920}"
+check "x-trends health" "${X_TRENDS_URL}/health"
+
 echo ""
 echo "--- 結果: ${PASS} OK / ${FAIL} FAIL ---"
 
-if command -v twitter &>/dev/null; then
+if command -v x-trends &>/dev/null; then
   echo ""
-  echo "twitter-cli (ホスト): インストール済み"
-  if twitter search "Dify" --json 2>/dev/null | head -c 80 | grep -q "text\|\["; then
-    echo "twitter-cli 認証: OK"
+  echo "x-trends (ホスト CLI): インストール済み"
+  if x-trends settings 2>/dev/null | head -c 80 | grep -q '"ok":true'; then
+    echo "x-trends 認証: OK"
   else
-    echo "twitter-cli 認証: 未設定またはセッション切れ（twitter login を実行）"
+    echo "x-trends 認証: 未設定またはトークン切れ（~/.config/x-trends/.env を確認）"
   fi
 else
   echo ""
-  echo "twitter-cli (ホスト): 未インストール（npm install -g @public-clis/twitter-cli）"
+  echo "x-trends (ホスト CLI): 未インストール"
 fi
 
 [[ "${FAIL}" -eq 0 ]]

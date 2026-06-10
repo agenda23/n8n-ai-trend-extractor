@@ -21,15 +21,16 @@
 |------|-----|------|
 | `N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS` | `true` | 設定ファイルの権限強制 |
 | `N8N_BLOCK_ENV_ACCESS_IN_NODE` | `false` | Code ノードから `$env` 参照を許可 |
-| `NODES_EXCLUDE` | `[]` | Execute Command ノードを有効化 |
+| `NODES_EXCLUDE` | `[]` | （旧 Execute Command 用・現行ワークフローでは未使用） |
 
 ### データ収集
 
 | 変数 | 必須 | 説明 |
 |------|------|------|
 | `USE_MOCK_X` | - | `true`: モックデータ使用 / `false`: 本番 X |
-| `TWITTER_AUTH_TOKEN` | 本番 X 時 | X Cookie `auth_token` |
-| `TWITTER_CT0` | 本番 X 時 | X Cookie `ct0` |
+| `TWITTER_AUTH_TOKEN` | 本番 X 時 | x-trends 用 X Cookie `auth_token` |
+| `X_TRENDS_BASE_URL` | - | n8n から x-trends への URL（デフォルト `http://x-trends:3920`） |
+| `X_TRENDS_API_KEY` | 任意 | x-trends HTTP API キー（`API_KEY` 設定時） |
 | `QIITA_ACCESS_TOKEN` | 任意 | Qiita API トークン（レート緩和） |
 
 ### 通知
@@ -74,8 +75,7 @@ GUI で設定する認証情報です。
 | ホスト | コンテナ | 用途 |
 |--------|----------|------|
 | `n8n_data`（名前付き） | `/home/node/.n8n` | n8n データ永続化 |
-| `./data/twitter-cli` | `/home/node/.cache/twitter-cli` | Cookie キャッシュ |
-| `./mock` | `/data/mock`（読み取り専用） | モックデータ |
+| `./mock` | `/home/node/.n8n-files/mock`（読み取り専用） | モックデータ |
 
 > n8n 2.x のファイル読み込み制限により、モック利用時は `/home/node/.n8n-files/` 配下へのマウントを推奨します。詳細は [セットアップマニュアル](./setup.md) Step 7 を参照。
 
@@ -88,6 +88,7 @@ GUI で設定する認証情報です。
 | ノード | 参照 |
 |--------|------|
 | IF Mock X | `$env.USE_MOCK_X` |
+| HTTP Request (X Trends) | `$env.X_TRENDS_BASE_URL`, `$env.X_TRENDS_API_KEY` |
 | HTTP Request (Qiita) | `$env.QIITA_ACCESS_TOKEN` |
 | Discord / Slack 通知 | `$env.DISCORD_WEBHOOK_URL` 等 |
 
@@ -109,7 +110,7 @@ GENERIC_TIMEZONE=Asia/Tokyo
 ```env
 USE_MOCK_X=false
 TWITTER_AUTH_TOKEN=xxxxxxxx
-TWITTER_CT0=xxxxxxxx
+X_TRENDS_BASE_URL=http://x-trends:3920
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 GENERIC_TIMEZONE=Asia/Tokyo
 ```

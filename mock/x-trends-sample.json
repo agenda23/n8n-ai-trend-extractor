@@ -1,0 +1,68 @@
+{
+  "ok": true,
+  "schema_version": "1",
+  "data": {
+    "trends": [
+      {
+        "id": null,
+        "name": "OpenClaw",
+        "url": "https://x.com/search?q=OpenClaw",
+        "tweetVolume": 8500,
+        "rank": 1,
+        "category": "trending",
+        "description": "Trending in Japan",
+        "hashtags": ["OpenClaw"],
+        "warnings": []
+      },
+      {
+        "id": null,
+        "name": "Dify",
+        "url": "https://x.com/search?q=Dify",
+        "tweetVolume": 6200,
+        "rank": 2,
+        "category": "trending",
+        "description": "Technology · Trending",
+        "hashtags": ["Dify"],
+        "warnings": []
+      },
+      {
+        "id": null,
+        "name": "n8n 自動化",
+        "url": "https://x.com/search?q=n8n",
+        "tweetVolume": 4100,
+        "rank": 3,
+        "category": "trending",
+        "description": "Trending in Japan",
+        "hashtags": [],
+        "warnings": []
+      },
+      {
+        "id": null,
+        "name": "ComfyUI",
+        "url": null,
+        "tweetVolume": 2800,
+        "rank": 4,
+        "category": "topic",
+        "description": "Technology · Trending",
+        "hashtags": [],
+        "warnings": []
+      },
+      {
+        "id": null,
+        "name": "生成AI",
+        "url": null,
+        "tweetVolume": 15000,
+        "rank": 5,
+        "category": "trending",
+        "description": "Trending in Japan",
+        "hashtags": [],
+        "warnings": []
+      }
+    ]
+  },
+  "meta": {
+    "preset": "japan",
+    "count": 5,
+    "cached": false
+  }
+}

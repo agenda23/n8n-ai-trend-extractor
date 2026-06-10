@@ -25,7 +25,7 @@
 
 **対処**:
 
-1. **Read Mock X** のパスを `/home/node/.n8n-files/mock/x-tweets-sample.json` に変更
+1. **Read Mock X** のパスを `/home/node/.n8n-files/mock/x-trends-sample.json` に変更
 2. `docker-compose.yml` のマウントを変更:
 
 ```yaml
@@ -67,16 +67,17 @@
 
 ---
 
-### Execute Command: twitter 認証失敗
+### HTTP Request (X Trends): x-trends 認証失敗
 
 **症状**: X データが空、認証エラー
 
 **対処**:
 
-1. `.env` の `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` を更新
-2. `docker compose restart n8n`
-3. 確認: `docker compose exec n8n twitter search "Dify" --json --max 1`
-4. キャッシュ削除: `rm -f data/twitter-cli/*`
+1. `.env` の `TWITTER_AUTH_TOKEN` を更新
+2. `docker compose restart x-trends n8n`
+3. 確認: `curl http://localhost:3920/health`
+4. 確認: `curl 'http://localhost:3920/api/v1/trends?preset=japan&count=5'`
+5. x-trends ログ: `docker compose logs x-trends --tail 50`
 
 ---
 

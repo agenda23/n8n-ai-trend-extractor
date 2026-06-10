@@ -4,7 +4,7 @@ X / note / Brain / Tips / Qiita の5ソースから超短期 AI トレンドを�
 
 ## 特徴
 
-- **5ソース並列収集**: X（twitter-cli）、note RSS、Brain/Tips 検索、Qiita API
+- **5ソース並列収集**: X（x-trends）、note RSS、Brain/Tips 検索、Qiita API
 - **Gemini 分析**: トレンド抽出 + リードマグネット施策案を JSON 構造化
 - **毎朝自動実行**: Schedule Trigger（07:00 JST）
 - **モックモード**: X API を使わずに E2E テスト可能
@@ -48,14 +48,14 @@ open http://localhost:5678
 
 ```
 n8n-ai-trend-extractor/
-├── docker/                  # Dockerfile（n8n + twitter-cli）
+├── docker/                  # Dockerfile（n8n + x-trends）
 ├── docker-compose.yml
 ├── workflows/               # n8n ワークフロー JSON
 ├── mock/                    # テスト用 X データ
 ├── scripts/                 # 疎通確認・セットアップ補助
 ├── docs/                    # ユーザー向けドキュメント
 ├── specs/                   # 設計書・仕様書
-└── data/twitter-cli/        # Cookie キャッシュ（git 除外）
+└── x-trends/                # x-trends 利用ガイド
 ```
 
 ## 必要なもの

@@ -10,6 +10,24 @@
 2. Discord に朝刊が届いているか確認（07:00 頃）
 3. 失敗がある場合は [トラブルシューティング](./troubleshooting.md) を参照
 
+### 週次ウォッチリスト（月曜 06:00）
+
+固定監視リストは廃止し、**Watchlist Generator** が `config/watchlist.json` を週1更新します。日次朝刊はこのファイルを **参考枠** として読み込みます。
+
+| 項目 | 内容 |
+|------|------|
+| ワークフロー | `Watchlist Generator`（`workflows/watchlist-generator.json`） |
+| スケジュール | 月曜 06:00 JST（日次 07:00 より前） |
+| 出力 | `config/watchlist.json` |
+
+**初回セットアップ:**
+
+1. n8n GUI で **Watchlist Generator** と **AIトレンド抽出・リード獲得** を有効化（インポート後は非 active になることがあります）
+2. Watchlist Generator を手動 Execute → `config/watchlist.json` が更新されることを確認
+3. 日次 WF を Execute → textData に watchlist セクションが含まれることを確認
+
+詳細: [動的ウォッチリスト戦略](./watchlist-strategy.md) / 品質改善: [改善方針ロードマップ](./improvement-roadmap.md)
+
 ### 基本コマンド
 
 ```bash
@@ -28,34 +46,29 @@ docker compose build --no-cache && docker compose up -d
 
 ---
 
-## X Cookie の更新
+## X 認証トークンの更新
 
-Cookie は **月1回程度** 失効します。X データ取得が失敗したら更新してください。
+`auth_token` は **月1回程度** 失効します。X データ取得が失敗したら更新してください。
 
 ### 手順
 
 1. ブラウザで X に再ログイン
-2. DevTools → Cookies → `auth_token` / `ct0` を取得
+2. DevTools → Cookies → `auth_token` を取得
 3. `.env` を更新:
 
 ```env
 TWITTER_AUTH_TOKEN=新しい値
-TWITTER_CT0=新しい値
 ```
 
 4. 反映と確認:
 
 ```bash
-docker compose restart n8n
-docker compose exec n8n twitter search "Dify" --json --max 1
+docker compose restart x-trends n8n
+curl http://localhost:3920/health
+curl 'http://localhost:3920/api/v1/search?query=Dify&count=1'
 ```
 
-5. 古いキャッシュを削除する場合:
-
-```bash
-rm -f data/twitter-cli/*
-docker compose restart n8n
-```
+ホスト CLI でも確認できます: `x-trends settings`
 
 ---
 
@@ -81,22 +94,16 @@ docker compose restart n8n
 - デフォルト: 毎日 07:00 JST（cron: `0 7 * * *`）
 - タイムゾーンは `.env` の `GENERIC_TIMEZONE=Asia/Tokyo` と連動
 
-### 2. X 検索キーワードの変更
+### 2. X トレンド取得の調整
 
-**Execute Command** ノードのコマンドを編集:
-
-```bash
-twitter search '"キーワード1" OR "キーワード2"' \
-  --since {{ $today.minus({ days: 3 }).toISODate() }} \
-  --until {{ $today.plus({ days: 1 }).toISODate() }} \
-  --min-likes 15 --json
-```
+**HTTP Request (X Trends)** ノードの Query パラメータを編集します。
 
 | パラメータ | 説明 | 調整例 |
 |-----------|------|--------|
-| 検索クエリ | トレンド対象キーワード | 自社ニッチに合わせて追加 |
-| `--min-likes` | 最低いいね数 | `10`（緩く）〜 `30`（厳しく） |
-| `--since` / `--until` | 取得期間 | `days: 5` で5日間に拡大 |
+| `preset` | 地域プリセット | `japan`（デフォルト） |
+| `count` | 取得件数（最大 50） | `50` |
+
+ツール名のマッチング・候補抽出は **Code (Combine Sources)** と **LLM** が担当します。収集段階でキーワードフィルタは行いません。
 
 ### 3. note RSS フィードの追加・変更
 

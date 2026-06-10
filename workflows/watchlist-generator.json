@@ -1,0 +1,415 @@
+[
+  {
+    "id": "wL7kG3mN9pQr2sTv",
+    "name": "Watchlist Generator",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 6 * * 1"
+              }
+            ]
+          }
+        },
+        "id": "b6449214-8638-4842-bce3-885737d28373",
+        "name": "Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -448,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://note.com/hashtag/ai%E5%89%AF%E6%A5%AD/rss",
+          "options": {}
+        },
+        "id": "8f56cc5c-c12e-499d-9d1d-0e1fdcf21965",
+        "name": "RSS Read (note-AI副業)",
+        "type": "n8n-nodes-base.rssFeedRead",
+        "typeVersion": 1.1,
+        "position": [
+          0,
+          200
+        ],
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "url": "https://note.com/hashtag/ai%E3%83%84%E3%83%BC%E3%83%AB/rss",
+          "options": {}
+        },
+        "id": "4c931b67-aa86-4f78-917d-ecfa2bd4b5d0",
+        "name": "RSS Read (note-AIツール)",
+        "type": "n8n-nodes-base.rssFeedRead",
+        "typeVersion": 1.1,
+        "position": [
+          0,
+          360
+        ],
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "url": "https://brain-market.com/search?keyword=AI",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "96a859d3-f431-4d28-9dbc-e6c69843481b",
+        "name": "HTTP Request (Brain)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          0,
+          520
+        ],
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "url": "https://tips.jp/search?q=AI",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "3d2114ae-e857-451c-8c81-c458731a4cb1",
+        "name": "HTTP Request (Tips)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          0,
+          680
+        ],
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "url": "=https://qiita.com/api/v2/items?query=tag:n8n+OR+tag:Dify+OR+tag:Manus+OR+tag:Windsurf+OR+tag:OpenClaw+OR+tag:ComfyUI+OR+tag:AI+created:>={{ $today.minus({ days: 7 }).toISODate() }}&per_page=30",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.QIITA_ACCESS_TOKEN }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "d6144f4c-ec88-410c-b060-ec557a445551",
+        "name": "HTTP Request (Qiita)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          0,
+          840
+        ],
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "fileSelector": "/home/node/.n8n-files/config/watchlist.json",
+          "options": {}
+        },
+        "id": "d1436d27-aee6-4159-aa88-280c0235b987",
+        "name": "Read Previous Watchlist",
+        "type": "n8n-nodes-base.readWriteFile",
+        "typeVersion": 1,
+        "position": [
+          0,
+          1000
+        ],
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "mode": "combine",
+          "combineBy": "combineAll",
+          "options": {}
+        },
+        "id": "7c304e47-de08-484a-a4f3-9c9e178a5b56",
+        "name": "Merge All Sources",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3,
+        "position": [
+          280,
+          520
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const GENERIC = new Set([\n  'AI', 'ChatGPT', 'GPT', 'LLM', 'MCP', 'API', 'RSS', 'HTML', 'CSS', 'SEO', 'UI', 'UX',\n  '生成AI', 'AI副業', 'ノーコード', '効率化', '副業', 'Python', 'JavaScript', 'TypeScript',\n  'Docker', 'GitHub', 'Google', 'Amazon', 'Microsoft', 'Apple', 'Mac', 'Windows', 'Linux',\n  'note', 'Qiita', 'Brain', 'Tips', 'Twitter', 'Discord', 'Slack', 'Gemini', 'Claude',\n]);\n\nfunction nodeItems(name) {\n  try { return $(name).all() || []; } catch { return []; }\n}\n\nfunction getHtmlBody(nodeName) {\n  const items = nodeItems(nodeName);\n  if (!items.length) return '';\n  const j = items[0].json;\n  return j.data || j.body || '';\n}\n\nfunction parseTipsHtml(html) {\n  const items = [];\n  const alts = [...html.matchAll(/alt=\"([^\"]{10,120})\"/g)].map((m) => m[1]);\n  const links = [...html.matchAll(/href=\"(https:\\/\\/tips\\.jp\\/u\\/[^\"]+\\/a\\/[^\"]+)\"/g)].map((m) => m[1]);\n  for (let i = 0; i < links.length && items.length < 15; i++) {\n    items.push(alts[i] || links[i].split('/').pop());\n  }\n  return items;\n}\n\nfunction parseBrainHtml(html) {\n  const links = [...html.matchAll(/href=\"(\\/u\\/[^\"]+\\/a\\/[^\"]+)\"/g)].map((m) => m[1].split('/').pop());\n  return links.slice(0, 15);\n}\n\nfunction addToken(map, token, source) {\n  const name = token.trim();\n  if (!name || name.length < 2 || name.length > 24) return;\n  if (GENERIC.has(name) || GENERIC.has(name.toLowerCase())) return;\n  if (/^\\d+$/.test(name)) return;\n  const key = name.toLowerCase();\n  const cur = map.get(key) || { name, score: 0, sources: new Set(), samples: [] };\n  cur.score += 1;\n  cur.sources.add(source);\n  if (cur.samples.length < 2) cur.samples.push(name);\n  map.set(key, cur);\n}\n\nfunction extractFromText(text, source, map) {\n  if (!text) return;\n  for (const m of text.matchAll(/\\b([A-Za-z][A-Za-z0-9_-]{1,28})\\.(dev|ai|app|io)\\b/g)) {\n    addToken(map, m[1], source);\n  }\n  for (const m of text.matchAll(/\\b([A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+)\\b/g)) {\n    addToken(map, m[1], source);\n  }\n  for (const m of text.matchAll(/\\b([A-Za-z][A-Za-z0-9]{2,20})\\b/g)) {\n    addToken(map, m[1], source);\n  }\n}\n\nfunction readPreviousWatchlist() {\n  const items = nodeItems('Read Previous Watchlist');\n  if (!items.length) return null;\n  const item = items[0];\n  let content = '';\n  if (item.binary?.data?.data) {\n    content = Buffer.from(item.binary.data.data, 'base64').toString('utf8');\n  } else if (typeof item.json?.data === 'string') {\n    content = item.json.data;\n  }\n  if (!content) return null;\n  try { return JSON.parse(content); } catch { return null; }\n}\n\nconst map = new Map();\n\nconst noteItems = [\n  ...nodeItems('RSS Read (note-AI副業)'),\n  ...nodeItems('RSS Read (note-AIツール)'),\n];\nfor (const item of noteItems) {\n  extractFromText(item.json.title || '', 'note', map);\n}\n\nconst qiitaItems = nodeItems('HTTP Request (Qiita)');\nfor (const item of qiitaItems) {\n  extractFromText(item.json.title || '', 'qiita', map);\n  for (const tag of item.json.tags || []) {\n    addToken(map, tag.name, 'qiita-tag');\n  }\n}\n\nconst brainHtml = getHtmlBody('HTTP Request (Brain)');\nfor (const t of parseBrainHtml(brainHtml)) extractFromText(t, 'brain', map);\n\nconst tipsHtml = getHtmlBody('HTTP Request (Tips)');\nfor (const t of parseTipsHtml(tipsHtml)) extractFromText(t, 'tips', map);\n\nconst mechanicalTop = [...map.values()]\n  .map((v) => ({\n    name: v.samples[0] || v.name,\n    score: v.score,\n    sources: [...v.sources],\n  }))\n  .sort((a, b) => b.score - a.score || b.sources.length - a.sources.length)\n  .slice(0, 40);\n\nlet summary = '=== 【週次: 機械抽出候補（7日分タイトル・タグから）】 ===\\n';\nif (mechanicalTop.length === 0) {\n  summary += '（候補なし）\\n';\n} else {\n  mechanicalTop.forEach((r, i) => {\n    summary += `${i + 1}. ${r.name} | score:${r.score} | sources:${r.sources.join('+')}\\n`;\n  });\n}\n\nsummary += '\\n=== 【note新着（抜粋）】 ===\\n';\nfor (const item of noteItems.slice(0, 20)) {\n  summary += `- ${item.json.title}\\n`;\n}\n\nsummary += '\\n=== 【Qiita記事（抜粋）】 ===\\n';\nfor (const item of qiitaItems.slice(0, 15)) {\n  const tags = (item.json.tags || []).map((t) => t.name).join(', ');\n  summary += `- ${item.json.title} | ${tags}\\n`;\n}\n\nconst prev = readPreviousWatchlist();\nsummary += '\\n=== 【前週 watchlist.json】 ===\\n';\nsummary += JSON.stringify(prev || { active: [], emerging: [], retire: [] }, null, 2);\n\nreturn [{\n  json: {\n    textData: summary,\n    mechanicalTop,\n    previousWatchlist: prev,\n  },\n}];"
+        },
+        "id": "be0fa869-4a96-40d1-adf8-d251e2a64f43",
+        "name": "Code (Mechanical Extract)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          520,
+          520
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.textData }}",
+          "hasOutputParser": true,
+          "messages": {
+            "messageValues": [
+              {
+                "message": "【役割】\n7日分の生データと機械抽出候補から、**来週の参考ウォッチリスト**を更新する。\nこれは日次朝刊の「参考枠」用であり、固定監視リストではない。\n\n【入力】\n- 機械抽出候補（score / sources 付き）\n- note/Qiita 抜粋\n- 前週 watchlist.json\n\n【出力（厳守）】\n- active: 今週も注目継続（2ソース以上 or 高score）\n- emerging: 新規・要観察（1ソース・初出）\n- retire: 前週 active だったが今週データに見当たらないもの\n- rationale: 更新理由を1文\n\n【ルール】\n- 抽象語（生成AI, ChatGPT, MCP 等）は含めない\n- 固有名詞ツール・サービス名のみ（1〜4語）\n- active は最大15件、emerging は最大10件\n- 迷ったら emerging に回す（日次LLMが本命データで最終判断）"
+              }
+            ]
+          }
+        },
+        "id": "c79620cf-01c7-4577-9d55-a67f7f1c969b",
+        "name": "Basic LLM Chain",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.6,
+        "position": [
+          760,
+          520
+        ]
+      },
+      {
+        "parameters": {
+          "modelName": "models/gemini-2.5-flash-lite",
+          "options": {
+            "temperature": 0.2
+          }
+        },
+        "id": "59ad4d42-188d-4bdf-9aeb-75ec73e4fe0d",
+        "name": "Google Gemini Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1,
+        "position": [
+          640,
+          720
+        ],
+        "credentials": {
+          "googlePalmApi": {
+            "id": "tcH7fCTdXqQaa31p",
+            "name": "Google Gemini(PaLM) Api account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "{\n  \"active\": [\n    \"OpenClaw\",\n    \"Dify\",\n    \"n8n\"\n  ],\n  \"emerging\": [\n    \"NewTool\"\n  ],\n  \"retire\": [\n    \"Devin\"\n  ],\n  \"rationale\": \"OpenClaw/Difyがnote+Qiitaで継続。Devinは7日間未出現。\"\n}"
+        },
+        "id": "34804dcb-5091-4dbc-b1d0-e50fc4a2ab5d",
+        "name": "Structured Output Parser",
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.2,
+        "position": [
+          880,
+          720
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const output = $json.output || $json;\nconst mechanicalTop = $('Code (Mechanical Extract)').first().json.mechanicalTop || [];\nconst prev = $('Code (Mechanical Extract)').first().json.previousWatchlist || {};\n\nconst active = (output.active || []).map(String).filter(Boolean);\nconst emerging = (output.emerging || []).map(String).filter(Boolean);\nlet retire = (output.retire || []).map(String).filter(Boolean);\n\nconst prevActive = new Set(prev.active || []);\nconst seen = new Set([...active, ...emerging].map((s) => s.toLowerCase()));\nfor (const name of prevActive) {\n  if (!seen.has(name.toLowerCase())) retire.push(name);\n}\nretire = [...new Set(retire)];\n\nconst doc = {\n  updatedAt: new Date().toISOString(),\n  version: 1,\n  active: active.slice(0, 15),\n  emerging: emerging.slice(0, 10),\n  retire: retire.slice(0, 20),\n  rationale: String(output.rationale || '').slice(0, 500),\n  mechanicalTop: mechanicalTop.slice(0, 20),\n};\n\nconst content = JSON.stringify(doc, null, 2);\nreturn [{\n  json: { watchlist: doc },\n  binary: {\n    data: {\n      data: Buffer.from(content, 'utf8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'watchlist.json',\n    },\n  },\n}];"
+        },
+        "id": "abe915ab-f572-4a3e-a0da-fa1e916b098c",
+        "name": "Code (Format Watchlist)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1000,
+          520
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "write",
+          "fileName": "/home/node/.n8n-files/config/watchlist.json",
+          "options": {}
+        },
+        "id": "d903238f-3914-424b-a950-ded53a330c09",
+        "name": "Write Watchlist",
+        "type": "n8n-nodes-base.readWriteFile",
+        "typeVersion": 1,
+        "position": [
+          1240,
+          520
+        ]
+      }
+    ],
+    "connections": {
+      "Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "RSS Read (note-AI副業)",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "RSS Read (note-AIツール)",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "HTTP Request (Brain)",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "HTTP Request (Tips)",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "HTTP Request (Qiita)",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Read Previous Watchlist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "RSS Read (note-AI副業)": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "RSS Read (note-AIツール)": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "HTTP Request (Brain)": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
+              "type": "main",
+              "index": 2
+            }
+          ]
+        ]
+      },
+      "HTTP Request (Tips)": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
+              "type": "main",
+              "index": 3
+            }
+          ]
+        ]
+      },
+      "HTTP Request (Qiita)": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
+              "type": "main",
+              "index": 4
+            }
+          ]
+        ]
+      },
+      "Merge All Sources": {
+        "main": [
+          [
+            {
+              "node": "Code (Mechanical Extract)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code (Mechanical Extract)": {
+        "main": [
+          [
+            {
+              "node": "Basic LLM Chain",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Basic LLM Chain": {
+        "main": [
+          [
+            {
+              "node": "Code (Format Watchlist)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code (Format Watchlist)": {
+        "main": [
+          [
+            {
+              "node": "Write Watchlist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Google Gemini Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Basic LLM Chain",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "Basic LLM Chain",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "active": false
+  }
+]

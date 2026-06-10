@@ -63,7 +63,7 @@
       },
       {
         "parameters": {
-          "fileSelector": "/home/node/.n8n-files/mock/x-tweets-sample.json",
+          "fileSelector": "/home/node/.n8n-files/mock/x-trends-sample.json",
           "options": {}
         },
         "id": "507bc10c-74a1-46d9-a5b0-f30a4d87922e",
@@ -87,20 +87,6 @@
           224,
           0
         ]
-      },
-      {
-        "parameters": {
-          "command": "=twitter search 'Dify OR n8n OR Manus OR OpenClaw OR Windsurf OR Bolt OR Lovable OR ComfyUI OR \"v0.dev\" OR \"Gemini CLI\" OR Make.com OR Zapier OR Devin OR Magnific OR 知らないと損 OR 神ワザ OR 爆速 OR 新ツール OR 初公開' --since {{ $today.minus({ days: 3 }).toISODate() }} --until {{ $today.plus({ days: 1 }).toISODate() }} --min-likes 5 --json"
-        },
-        "id": "544e50e8-93da-4335-9921-ba38250be81e",
-        "name": "Execute Command",
-        "type": "n8n-nodes-base.executeCommand",
-        "typeVersion": 1,
-        "position": [
-          224,
-          208
-        ],
-        "continueOnFail": true
       },
       {
         "parameters": {
@@ -215,7 +201,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Code はデータ整形のみ。候補選定・keyword判断は LLM がルーブリックに従って実施\nconst TOOL_PATTERNS = [\n  { name: 'Dify', re: /\\bdify\\b/i },\n  { name: 'n8n', re: /\\bn8n\\b/i },\n  { name: 'Manus', re: /\\bmanus\\b/i },\n  { name: 'OpenClaw', re: /\\bopenclaw\\b/i },\n  { name: 'Windsurf', re: /\\bwindsurf\\b/i },\n  { name: 'Bolt', re: /\\bbolt\\.new\\b/i },\n  { name: 'v0', re: /\\bv0\\.dev\\b|\\bv0 dev\\b/i },\n  { name: 'Lovable', re: /\\blovable\\b/i },\n  { name: 'ComfyUI', re: /\\bcomfyui\\b/i },\n  { name: 'Gemini CLI', re: /gemini\\s*cli/i },\n  { name: 'Devin', re: /\\bdevin\\b/i },\n  { name: 'Magnific', re: /\\bmagnific\\b/i },\n  { name: 'Make', re: /\\bmake\\.com\\b/i },\n  { name: 'Zapier', re: /\\bzapier\\b/i },\n  { name: 'Claude Code', re: /claude\\s*code|claudecode/i },\n  { name: 'Cursor', re: /\\bcursor\\b/i },\n];\n\nconst MONITORED_TOOLS = TOOL_PATTERNS.map((t) => t.name).join(', ');\n\nfunction nodeItems(name) {\n  try {\n    return $(name).all() || [];\n  } catch (e) {\n    return [];\n  }\n}\n\nfunction getHtmlBody(nodeName) {\n  const items = nodeItems(nodeName);\n  if (!items.length) return '';\n  const j = items[0].json;\n  return j.data || j.body || '';\n}\n\nfunction parseTipsHtml(html) {\n  const items = [];\n  const seen = new Set();\n  const alts = [...html.matchAll(/alt=\"([^\"]{10,120})\"/g)].map((m) => m[1]);\n  const links = [...html.matchAll(/href=\"(https:\\/\\/tips\\.jp\\/u\\/[^\"]+\\/a\\/[^\"]+)\"/g)].map((m) => m[1]);\n  for (let i = 0; i < links.length && items.length < 10; i++) {\n    const url = links[i];\n    if (seen.has(url)) continue;\n    seen.add(url);\n    const title = alts[i] || url.split('/').pop();\n    if (/Tips.*記事|カテゴリー/.test(title)) continue;\n    items.push({ title, url });\n  }\n  return items;\n}\n\nfunction parseBrainHtml(html) {\n  const items = [];\n  const seen = new Set();\n  const links = [...html.matchAll(/href=\"(\\/u\\/[^\"]+\\/a\\/[^\"]+)\"/g)].map((m) => `https://brain-market.com${m[1]}`);\n  for (const url of links) {\n    if (seen.has(url)) continue;\n    seen.add(url);\n    const slug = url.split('/').pop();\n    items.push({ title: `Brain教材 (${slug})`, url });\n    if (items.length >= 10) break;\n  }\n  return items;\n}\n\nfunction parseTweets(raw) {\n  const parsed = JSON.parse(raw);\n  return Array.isArray(parsed) ? parsed : (parsed.data || []);\n}\n\nfunction engagement(t) {\n  const likes = t.metrics?.likes ?? t.favorite_count ?? 0;\n  const rts = t.metrics?.retweets ?? t.retweet_count ?? 0;\n  return likes + rts * 2;\n}\n\nfunction extractBuzzFromTweets(tweets) {\n  const signals = new Map();\n\n  for (const t of tweets) {\n    const text = (t.text || '').replace(/\\n/g, ' ');\n    if (!text || /公式LINE|プレゼント企画|プロフをチェック/.test(text)) continue;\n    const eng = engagement(t);\n\n    for (const { name, re } of TOOL_PATTERNS) {\n      if (!re.test(text)) continue;\n      const cur = signals.get(name) || {\n        mentions: 0,\n        totalEngagement: 0,\n        maxEngagement: 0,\n        topSnippet: '',\n      };\n      cur.mentions += 1;\n      cur.totalEngagement += eng;\n      if (eng >= cur.maxEngagement) {\n        cur.maxEngagement = eng;\n        cur.topSnippet = text.slice(0, 100);\n      }\n      signals.set(name, cur);\n    }\n  }\n\n  return [...signals.entries()]\n    .map(([name, s]) => ({\n      name,\n      ...s,\n      rankScore: s.maxEngagement + s.mentions * 12,\n    }))\n    .sort((a, b) => b.rankScore - a.rankScore);\n}\n\nfunction extractToolsFromTexts(texts) {\n  const found = new Map();\n  for (const text of texts) {\n    if (!text) continue;\n    for (const { name, re } of TOOL_PATTERNS) {\n      if (re.test(text)) {\n        found.set(name, (found.get(name) || 0) + 1);\n      }\n    }\n  }\n  return [...found.entries()].sort((a, b) => b[1] - a[1]);\n}\n\nlet combinedText = '=== 【超短期トレンド分析用マルチソースデータ】 ===\\n';\ncombinedText += '※ Codeは中立データのみ提供。候補選定はLLMがルーブリックで実施。\\n';\ncombinedText += `※ 監視ツール（TOOL_PATTERNS）: ${MONITORED_TOOLS}\\n`;\ncombinedText += '※ 上記以外の初出固有名詞は「X生投稿」から積極探索すること。\\n\\n';\nlet buzzCandidates = [];\nlet secondaryCandidates = [];\nlet noteToolsAgg = [];\nlet qiitaToolsAgg = [];\n\n// --- 1. X (Twitter) ---\ntry {\n  const execJson = nodeItems('Execute Command')[0]?.json || {};\n  let xOutput = execJson.stdout;\n  if (!xOutput && execJson.error) {\n    combinedText += `■ [X (Twitter)] ---------\\n※ Execute Command エラー: ${String(execJson.error).slice(0, 300)}\\n\\n`;\n  }\n  if (!xOutput) xOutput = nodeItems('Normalize Mock X')[0]?.json?.stdout;\n  if (xOutput) {\n    const tweets = parseTweets(xOutput);\n    buzzCandidates = extractBuzzFromTweets(tweets);\n\n    combinedText += '■ [Xツール言及シグナル（参考データ）] ---------\\n';\n    if (buzzCandidates.length === 0) {\n      combinedText += '（X上のツール言及なし。note/Qiita/生投稿から候補を抽出すること）\\n';\n    } else {\n      buzzCandidates.slice(0, 15).forEach((s, i) => {\n        combinedText += `${i + 1}. ${s.name} | 言及${s.mentions} | 最高Eng${s.maxEngagement} | 「${s.topSnippet}」\\n`;\n      });\n    }\n    combinedText += '\\n';\n\n    combinedText += '■ [X (Twitter) 生投稿（上位30件）] ---------\\n';\n    const sorted = [...tweets]\n      .filter((t) => t.text && !/公式LINE|プレゼント企画|プロフをチェック/.test(t.text))\n      .sort((a, b) => engagement(b) - engagement(a))\n      .slice(0, 30);\n\n    for (const t of sorted) {\n      const likes = t.metrics?.likes ?? t.favorite_count ?? 0;\n      const rts = t.metrics?.retweets ?? t.retweet_count ?? 0;\n      const createdAt = t.createdAtISO || t.created_at || '不明';\n      combinedText += `- [${createdAt}] Fav:${likes} RT:${rts}\\n  ${(t.text || '').replace(/\\n/g, ' ')}\\n`;\n    }\n    combinedText += '\\n';\n  } else {\n    combinedText += '■ [X (Twitter)] ---------\\n（Xデータなし: twitter-cliエラーまたは検索0件）\\n\\n';\n  }\n} catch (e) {\n  combinedText += `※ Xデータのパースエラー: ${e.message}\\n\\n`;\n}\n\n// --- 2. note ---\ntry {\n  const noteItems = [\n    ...nodeItems('RSS Read (note-AI副業)'),\n    ...nodeItems('RSS Read (note-AIツール)'),\n  ];\n  const noteTitles = noteItems.map((i) => i.json.title || '');\n  noteToolsAgg = extractToolsFromTexts(noteTitles);\n\n  if (noteToolsAgg.length > 0) {\n    combinedText += '■ [noteで検出された具体ツール名] ---------\\n';\n    for (const [name, count] of noteToolsAgg.slice(0, 10)) {\n      combinedText += `- ${name}: タイトル言及${count}件\\n`;\n    }\n    combinedText += '\\n';\n  }\n\n  if (noteItems.length > 0) {\n    combinedText += '■ [note新着記事（タイトルのみ）] ---------\\n';\n    for (const item of noteItems.slice(0, 12)) {\n      combinedText += `- ${item.json.title} | ${item.json.link}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ noteデータ取得エラー: ${e.message}\\n\\n`;\n}\n\n// --- 3. Brain ---\ntry {\n  const brainHtml = getHtmlBody('HTTP Request (Brain)');\n  const brainItems = brainHtml ? parseBrainHtml(brainHtml) : [];\n  if (brainItems.length > 0) {\n    combinedText += '■ [Brain 教材タイトル] ---------\\n';\n    for (const item of brainItems) {\n      combinedText += `- ${item.title} | ${item.url}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Brainデータエラー: ${e.message}\\n\\n`;\n}\n\n// --- 4. Tips ---\ntry {\n  const tipsHtml = getHtmlBody('HTTP Request (Tips)');\n  const tipsItems = tipsHtml ? parseTipsHtml(tipsHtml) : [];\n  if (tipsItems.length > 0) {\n    combinedText += '■ [Tips 教材タイトル] ---------\\n';\n    for (const item of tipsItems) {\n      combinedText += `- ${item.title} | ${item.url}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Tipsデータエラー: ${e.message}\\n\\n`;\n}\n\n// --- 5. Qiita ---\ntry {\n  const qiitaItems = nodeItems('HTTP Request (Qiita)');\n  const qiitaTitles = qiitaItems.map((i) => i.json.title || '');\n  qiitaToolsAgg = extractToolsFromTexts(qiitaTitles);\n\n  if (qiitaToolsAgg.length > 0) {\n    combinedText += '■ [Qiitaで検出された具体ツール名] ---------\\n';\n    for (const [name, count] of qiitaToolsAgg.slice(0, 10)) {\n      combinedText += `- ${name}: 記事言及${count}件\\n`;\n    }\n    combinedText += '\\n';\n  }\n\n  if (qiitaItems.length > 0) {\n    combinedText += '■ [Qiita 技術記事] ---------\\n';\n    for (const item of qiitaItems.slice(0, 12)) {\n      const tags = (item.json.tags || []).map((t) => t.name).join(', ');\n      combinedText += `- ${item.json.title} | LG:${item.json.likes_count || 0} | ${tags} | ${item.json.url}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Qiitaデータエラー: ${e.message}\\n\\n`;\n}\n\n// Xが空のとき note/Qiita から候補を補完\nif (buzzCandidates.length === 0) {\n  try {\n    const noteItems = [\n      ...nodeItems('RSS Read (note-AI副業)'),\n      ...nodeItems('RSS Read (note-AIツール)'),\n    ];\n    const qiitaItems = nodeItems('HTTP Request (Qiita)');\n    const noteTools = extractToolsFromTexts(noteItems.map((i) => i.json.title || ''));\n    const qiitaTools = extractToolsFromTexts(qiitaItems.map((i) => i.json.title || ''));\n    const merged = new Map();\n    for (const [name, count] of [...noteTools, ...qiitaTools]) {\n      merged.set(name, (merged.get(name) || 0) + count);\n    }\n    secondaryCandidates = [...merged.entries()]\n      .sort((a, b) => b[1] - a[1])\n      .map(([name, count]) => ({ name, mentions: count, source: 'note/Qiita' }));\n\n    if (secondaryCandidates.length > 0) {\n      combinedText += '■ [代替バズ候補（X未取得時・note/Qiitaから）] ---------\\n';\n      secondaryCandidates.slice(0, 10).forEach((s, i) => {\n        combinedText += `${i + 1}. ${s.name} | 言及${s.mentions}件 | 出典:${s.source}\\n`;\n      });\n      combinedText += '\\n';\n    }\n  } catch (e) {\n    combinedText += `※ 代替候補抽出エラー: ${e.message}\\n\\n`;\n  }\n}\n\n// マルチソース言及カウント（ルーブリック1用・選定はLLMが行う）\nconst xMap = Object.fromEntries(buzzCandidates.map((s) => [s.name, s.mentions]));\nconst noteMap = Object.fromEntries(noteToolsAgg);\nconst qiitaMap = Object.fromEntries(qiitaToolsAgg);\nconst allToolNames = new Set([\n  ...buzzCandidates.map((s) => s.name),\n  ...noteToolsAgg.map(([n]) => n),\n  ...qiitaToolsAgg.map(([n]) => n),\n]);\n\nif (allToolNames.size > 0) {\n  combinedText += '■ [マルチソース言及カウント（選定参考）] ---------\\n';\n  const rows = [...allToolNames].map((name) => {\n    const x = xMap[name] || 0;\n    const note = noteMap[name] || 0;\n    const qiita = qiitaMap[name] || 0;\n    const srcCount = [x > 0, note > 0, qiita > 0].filter(Boolean).length;\n    const srcLabel = [\n      x > 0 ? 'X' : null,\n      note > 0 ? 'note' : null,\n      qiita > 0 ? 'Qiita' : null,\n    ].filter(Boolean).join('+') || '—';\n    return { name, x, note, qiita, srcCount, srcLabel };\n  }).sort((a, b) => b.srcCount - a.srcCount || (b.x + b.note + b.qiita) - (a.x + a.note + a.qiita));\n\n  for (const r of rows.slice(0, 20)) {\n    combinedText += `- ${r.name}: X${r.x} / note${r.note} / Qiita${r.qiita} | 裏付けソース:${r.srcCount} (${r.srcLabel})\\n`;\n  }\n  combinedText += '\\n';\n}\n\nconst allCandidateNames = [\n  ...buzzCandidates.map((s) => s.name),\n  ...secondaryCandidates.map((s) => s.name),\n];\n\nreturn [{\n  json: {\n    textData: combinedText,\n    buzzCandidates: [...new Set(allCandidateNames)],\n  },\n}];"
+          "jsCode": "// 日次: 生データ + 参考（watchlist / x-trends）。候補選定は LLM のみ。\nfunction nodeItems(name) {\n  try { return $(name).all() || []; } catch { return []; }\n}\n\nfunction getHtmlBody(nodeName) {\n  const items = nodeItems(nodeName);\n  if (!items.length) return '';\n  const j = items[0].json;\n  return j.data || j.body || '';\n}\n\nfunction parseTipsHtml(html) {\n  const items = [];\n  const seen = new Set();\n  const alts = [...html.matchAll(/alt=\"([^\"]{10,120})\"/g)].map((m) => m[1]);\n  const links = [...html.matchAll(/href=\"(https:\\/\\/tips\\.jp\\/u\\/[^\"]+\\/a\\/[^\"]+)\"/g)].map((m) => m[1]);\n  for (let i = 0; i < links.length && items.length < 10; i++) {\n    const url = links[i];\n    if (seen.has(url)) continue;\n    seen.add(url);\n    const title = alts[i] || url.split('/').pop();\n    if (/Tips.*記事|カテゴリー/.test(title)) continue;\n    items.push({ title, url });\n  }\n  return items;\n}\n\nfunction parseBrainHtml(html) {\n  const items = [];\n  const seen = new Set();\n  const links = [...html.matchAll(/href=\"(\\/u\\/[^\"]+\\/a\\/[^\"]+)\"/g)].map((m) => `https://brain-market.com${m[1]}`);\n  for (const url of links) {\n    if (seen.has(url)) continue;\n    seen.add(url);\n    const slug = url.split('/').pop();\n    items.push({ title: `Brain教材 (${slug})`, url });\n    if (items.length >= 10) break;\n  }\n  return items;\n}\n\nfunction parseTrends(raw) {\n  const parsed = JSON.parse(raw);\n  if (Array.isArray(parsed.data?.trends)) return parsed.data.trends;\n  if (Array.isArray(parsed.trends)) return parsed.trends;\n  return [];\n}\n\nfunction readWatchlist() {\n  const items = nodeItems('Read Watchlist');\n  if (!items.length) return null;\n  const item = items[0];\n  let content = '';\n  if (item.binary?.data?.data) {\n    content = Buffer.from(item.binary.data.data, 'base64').toString('utf8');\n  } else if (typeof item.json?.data === 'string') {\n    content = item.json.data;\n  }\n  if (!content) return null;\n  try { return JSON.parse(content); } catch { return null; }\n}\n\nlet combinedText = '=== 【超短期トレンド分析用マルチソースデータ】 ===\\n';\ncombinedText += '※ Codeは生データと参考値のみ提供。候補選定はLLMがルーブリックで実施。\\n';\ncombinedText += '※ 本命= note/Brain/Tips/Qiita 生テキスト。watchlist・x-trends は参考のみ。\\n\\n';\n\ncombinedText += '=== 【本命データ — 候補選定の主根拠】 ===\\n\\n';\n\ntry {\n  const noteItems = [\n    ...nodeItems('RSS Read (note-AI副業)'),\n    ...nodeItems('RSS Read (note-AIツール)'),\n  ];\n  if (noteItems.length > 0) {\n    combinedText += '■ [note新着記事（タイトルのみ）] ---------\\n';\n    for (const item of noteItems.slice(0, 15)) {\n      combinedText += `- ${item.json.title} | ${item.json.link}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ noteデータ取得エラー: ${e.message}\\n\\n`;\n}\n\ntry {\n  const brainHtml = getHtmlBody('HTTP Request (Brain)');\n  const brainItems = brainHtml ? parseBrainHtml(brainHtml) : [];\n  if (brainItems.length > 0) {\n    combinedText += '■ [Brain 教材タイトル] ---------\\n';\n    for (const item of brainItems) {\n      combinedText += `- ${item.title} | ${item.url}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Brainデータエラー: ${e.message}\\n\\n`;\n}\n\ntry {\n  const tipsHtml = getHtmlBody('HTTP Request (Tips)');\n  const tipsItems = tipsHtml ? parseTipsHtml(tipsHtml) : [];\n  if (tipsItems.length > 0) {\n    combinedText += '■ [Tips 教材タイトル] ---------\\n';\n    for (const item of tipsItems) {\n      combinedText += `- ${item.title} | ${item.url}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Tipsデータエラー: ${e.message}\\n\\n`;\n}\n\ntry {\n  const qiitaItems = nodeItems('HTTP Request (Qiita)');\n  if (qiitaItems.length > 0) {\n    combinedText += '■ [Qiita 技術記事] ---------\\n';\n    for (const item of qiitaItems.slice(0, 15)) {\n      const tags = (item.json.tags || []).map((t) => t.name).join(', ');\n      combinedText += `- ${item.json.title} | LG:${item.json.likes_count || 0} | ${tags} | ${item.json.url}\\n`;\n    }\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ Qiitaデータエラー: ${e.message}\\n\\n`;\n}\n\ncombinedText += '=== 【参考データ — 週次ウォッチリスト（非本命）】 ===\\n';\ncombinedText += '※ 月曜更新。候補の直接根拠にしない。既知ツールの文脈確認用。\\n\\n';\ntry {\n  const wl = readWatchlist();\n  if (!wl) {\n    combinedText += '（watchlist.json 未生成 — 週次 Watchlist Generator を実行してください）\\n\\n';\n  } else {\n    combinedText += `■ 更新: ${wl.updatedAt || '不明'}\\n`;\n    combinedText += `■ active: ${(wl.active || []).join(', ') || '—'}\\n`;\n    combinedText += `■ emerging: ${(wl.emerging || []).join(', ') || '—'}\\n`;\n    combinedText += `■ retire: ${(wl.retire || []).join(', ') || '—'}\\n`;\n    if (wl.rationale) combinedText += `■ rationale: ${wl.rationale}\\n`;\n    combinedText += '\\n';\n  }\n} catch (e) {\n  combinedText += `※ watchlist 読込エラー: ${e.message}\\n\\n`;\n}\n\ncombinedText += '=== 【参考データ — X Explore 全体トレンド（非限定）】 ===\\n';\ncombinedText += '※ 日本全体。スポーツ・芸能等含む。候補の直接根拠にしない。\\n\\n';\ntry {\n  const xJson = nodeItems('Normalize X Trends')[0]?.json || {};\n  let xOutput = xJson.stdout;\n  if (!xOutput && xJson.error) {\n    combinedText += `※ x-trends エラー: ${String(xJson.error).slice(0, 300)}\\n\\n`;\n  }\n  if (!xOutput) xOutput = nodeItems('Normalize Mock X')[0]?.json?.stdout;\n  if (xOutput) {\n    const trends = parseTrends(xOutput);\n    combinedText += '■ [X (Twitter) トレンド一覧（参考）] ---------\\n';\n    const sorted = [...trends].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));\n    for (const t of sorted.slice(0, 30)) {\n      const vol = t.tweetVolume != null ? t.tweetVolume : '—';\n      combinedText += `- #${t.rank ?? '?'} ${t.name} | Vol:${vol} | ${t.description || t.category || ''}\\n`;\n    }\n    combinedText += '\\n';\n  } else {\n    combinedText += '（X参考データなし）\\n\\n';\n  }\n} catch (e) {\n  combinedText += `※ X参考データのパースエラー: ${e.message}\\n\\n`;\n}\n\nreturn [{ json: { textData: combinedText } }];"
         },
         "id": "169ff5e9-5a3b-45a5-a6f3-0ffe78facd96",
         "name": "Code (Combine Sources)",
@@ -234,7 +220,7 @@
           "messages": {
             "messageValues": [
               {
-                "message": "【役割】\n直近3〜5日のマルチソースデータを読み、**注目ツール候補リスト**と**全体分析**の2つだけを出力するアナリスト。\n候補ごとの個別分析は書かない。入力データの整形は済んでいる。**何を候補にするかはあなた（LLM）がルーブリックで判断すること。**\n\n【出力形式（厳守）】\n1. candidates: 固有名詞ツール名の配列（優先度順）\n2. overall_analysis: 全体所見を1つの文章で\n\n【選定ルーブリック（candidates の判断基準・厳守）】\n1. **複数ソース（X + note/Qiita）で裏付けがあるものを最優先**（「マルチソース言及カウント」の裏付けソース数が多い順）\n2. **定番ツール（Claude Code, Cursor, ChatGPT）は全体で最大1件**。それ以外はニッチ・新興を優先\n3. **抽象語は候補不可**: MCP, 生成AI, AI副業, ChatGPT, ノーコード, 効率化, AI画像生成 など\n4. **TOOL_PATTERNS外の初出固有名詞**が「X生投稿」にあれば積極採用（監視リスト外の新興ツールを見逃さない）\n5. **根拠が弱いものは出力しない**（2〜3件でも可。無理に10件埋めない）\n\n【candidates の形式】\n- 各要素は製品名・サービス名（1〜4語の固有名詞）のみ\n- 良い例: Dify, Manus, n8n, OpenClaw, ComfyUI, Lovable, Windsurf\n- 最大10件。ルーブリック5により根拠弱ければ2〜3件でよい\n\n【overall_analysis に含める観点（全体で1文に統合）】\n- Xバズの傾向\n- note/Brain/Tipsの実売シグナル\n- Qiita等の実装トレンド・詰まりポイント\n- リード獲得の打ち手（1〜2個）\n\n【文字数制約（Discord 2000字制限）】\n- overall_analysis: 最大800文字\n- candidates: 候補ごとの説明は書かない（名前のみ）"
+                "message": "【役割】\n直近3〜5日のマルチソース**生データ**を読み、**注目ツール候補リスト**と**全体分析**を出力するアナリスト。\n固定監視リストは存在しない。**固有名詞の抽出・候補選定はすべて LLM が実施**する。\n\n【データの読み方（厳守）】\n- **「本命データ」** = note / Brain / Tips / Qiita の生タイトル・記事。**候補選定の唯一の主根拠**。\n- **「週次ウォッチリスト（参考）」** = 週1更新の active/emerging/retire。**候補の直接根拠にしてはならない**。既知ツールの文脈確認のみ。\n- **「X Explore 全体トレンド（参考）」** = カテゴリ非限定の宏观トレンド。**候補の直接根拠にしてはならない**。\n\n【出力形式（厳守）】\n1. candidates: 固有名詞ツール名の配列（優先度順）\n2. overall_analysis: 全体所見を1つの文章で\n\n【選定ルーブリック（candidates）】\n1. **本命データ内で複数ソース（note + Qiita 等）に現れる固有名詞を最優先**\n2. **定番（Claude Code, Cursor, ChatGPT）は最大1件**。ニッチ・新興を優先\n3. **抽象語不可**: MCP, 生成AI, AI副業, ノーコード, 効率化 等\n4. **本命データに根拠がある初出固有名詞**を積極採用。watchlist/X参考**のみ**のものは不可\n5. 根拠弱ければ2〜3件でよい（無理に10件埋めない）\n\n【overall_analysis】\n- note/Brain/Tips/Qiita のシグナル（主）\n- watchlist / X参考は補足1フレーズまで\n- リード獲得の打ち手1〜2個\n\n【文字数】overall_analysis 最大800文字。candidates は名前のみ。"
               }
             ]
           }
@@ -289,7 +275,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const output = $json.output || $json;\nconst DISCORD_MAX = 2000;\nconst LIMIT = 1985;\n\nconst GENERIC = /^(AI|ChatGPT|生成AI|AI画像|AI動画|AIライティング|AI副業|ノーコード|効率化|副業|MCP)$/i;\nconst ESTABLISHED = /^(Claude Code|Cursor|ChatGPT)$/i;\n\nfunction splitForDiscord(text) {\n  if (text.length <= DISCORD_MAX) return [text.trim()];\n  const chunks = [];\n  let current = '';\n  for (const line of text.split('\\n')) {\n    const next = current ? `${current}\\n${line}` : line;\n    if (next.length > LIMIT) {\n      if (current) chunks.push(current);\n      if (line.length > LIMIT) {\n        for (let i = 0; i < line.length; i += LIMIT) chunks.push(line.slice(i, i + LIMIT));\n        current = '';\n      } else current = line;\n    } else current = next;\n  }\n  if (current) chunks.push(current);\n  return chunks.map((c) => c.trim()).filter(Boolean);\n}\n\nconst rawCandidates = output.candidates || [];\nconst candidates = rawCandidates\n  .map((c) => (typeof c === 'string' ? c : c?.keyword || ''))\n  .map((k) => String(k).trim())\n  .filter((k) => k && !GENERIC.test(k));\n\nconst seen = new Set();\nlet unique = [];\nfor (const k of candidates) {\n  if (seen.has(k)) continue;\n  seen.add(k);\n  unique.push(k);\n  if (unique.length >= 10) break;\n}\n\nconst established = unique.filter((k) => ESTABLISHED.test(k));\nif (established.length > 1) {\n  const keep = established[0];\n  unique = unique.filter((k) => !ESTABLISHED.test(k) || k === keep);\n}\n\nconst overall = String(output.overall_analysis || '').trim();\n\nlet message = '📢 【朝刊】AIツール・バズシグナル速報 📢\\n\\n';\nmessage += '直近3日間のマルチソース分析\\n\\n';\nmessage += `【注目候補（${unique.length}件）】\\n`;\nif (unique.length === 0) {\n  message += '（候補なし）\\n';\n} else {\n  unique.forEach((k, i) => { message += `${i + 1}. ${k}\\n`; });\n}\nmessage += '\\n【全体分析】\\n';\nmessage += overall || '（分析なし）\\n';\n\nif (unique.length === 0 && !overall) {\n  message += '\\n確認: ①twitter-cli Cookie ②USE_MOCK_X=true ③note/Qiita取得状況\\n';\n}\n\nconst parts = splitForDiscord(message);\nconst total = parts.length;\n\nreturn parts.map((text, index) => {\n  const body = total > 1 ? `[${index + 1}/${total}]\\n${text}` : text;\n  return {\n    json: {\n      text: body.length > DISCORD_MAX ? body.slice(0, DISCORD_MAX) : body,\n      part: index + 1,\n      totalParts: total,\n      candidates: unique,\n      overall_analysis: overall,\n    },\n  };\n});"
+          "jsCode": "const output = $json.output || $json;\nconst DISCORD_MAX = 2000;\nconst LIMIT = 1985;\n\nconst GENERIC = /^(AI|ChatGPT|生成AI|AI画像|AI動画|AIライティング|AI副業|ノーコード|効率化|副業|MCP)$/i;\nconst ESTABLISHED = /^(Claude Code|Cursor|ChatGPT)$/i;\n\nfunction splitForDiscord(text) {\n  if (text.length <= DISCORD_MAX) return [text.trim()];\n  const chunks = [];\n  let current = '';\n  for (const line of text.split('\\n')) {\n    const next = current ? `${current}\\n${line}` : line;\n    if (next.length > LIMIT) {\n      if (current) chunks.push(current);\n      if (line.length > LIMIT) {\n        for (let i = 0; i < line.length; i += LIMIT) chunks.push(line.slice(i, i + LIMIT));\n        current = '';\n      } else current = line;\n    } else current = next;\n  }\n  if (current) chunks.push(current);\n  return chunks.map((c) => c.trim()).filter(Boolean);\n}\n\nconst rawCandidates = output.candidates || [];\nconst candidates = rawCandidates\n  .map((c) => (typeof c === 'string' ? c : c?.keyword || ''))\n  .map((k) => String(k).trim())\n  .filter((k) => k && !GENERIC.test(k));\n\nconst seen = new Set();\nlet unique = [];\nfor (const k of candidates) {\n  if (seen.has(k)) continue;\n  seen.add(k);\n  unique.push(k);\n  if (unique.length >= 10) break;\n}\n\nconst established = unique.filter((k) => ESTABLISHED.test(k));\nif (established.length > 1) {\n  const keep = established[0];\n  unique = unique.filter((k) => !ESTABLISHED.test(k) || k === keep);\n}\n\nconst overall = String(output.overall_analysis || '').trim();\n\nlet message = '📢 【朝刊】AIツール・バズシグナル速報 📢\\n\\n';\nmessage += '直近3日間のマルチソース分析\\n\\n';\nmessage += `【注目候補（${unique.length}件）】\\n`;\nif (unique.length === 0) {\n  message += '（候補なし）\\n';\n} else {\n  unique.forEach((k, i) => { message += `${i + 1}. ${k}\\n`; });\n}\nmessage += '\\n【全体分析】\\n';\nmessage += overall || '（分析なし）\\n';\n\nif (unique.length === 0 && !overall) {\n  message += '\\n確認: ①x-trends 認証 ②USE_MOCK_X=true ③note/Qiita取得状況\\n';\n}\n\nconst parts = splitForDiscord(message);\nconst total = parts.length;\n\nreturn parts.map((text, index) => {\n  const body = total > 1 ? `[${index + 1}/${total}]\\n${text}` : text;\n  return {\n    json: {\n      text: body.length > DISCORD_MAX ? body.slice(0, DISCORD_MAX) : body,\n      part: index + 1,\n      totalParts: total,\n      candidates: unique,\n      overall_analysis: overall,\n    },\n  };\n});"
         },
         "id": "2c638c05-d2cb-49af-b1e1-75f24a302021",
         "name": "Code (Format Notification)",
@@ -323,6 +309,71 @@
         ],
         "id": "06b041d2-d4bc-418e-8328-07d06834cb76",
         "name": "Discord"
+      },
+      {
+        "parameters": {
+          "url": "={{ ($env.X_TRENDS_BASE_URL || 'http://x-trends:3920') + '/api/v1/trends' }}",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "preset",
+                "value": "japan"
+              },
+              {
+                "name": "count",
+                "value": "50"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "={{ $env.X_TRENDS_API_KEY || '' }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "55f44379-ef3a-4396-af73-5d50d1e4e04d",
+        "name": "HTTP Request (X Trends)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          0,
+          208
+        ],
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const item = $input.first();\nif (!item) {\n  return [{ json: { stdout: JSON.stringify({ ok: false, data: { trends: [] } }), error: 'no response from x-trends' } }];\n}\n\nconst response = item.json || {};\nif (item.error) {\n  const msg = String(item.error.message || item.error);\n  return [{ json: { stdout: JSON.stringify({ ok: false, data: { trends: [] } }), error: msg } }];\n}\n\nlet stdout = '';\nlet error;\n\nif (response.ok && Array.isArray(response.data?.trends)) {\n  stdout = JSON.stringify({\n    ok: true,\n    data: { trends: response.data.trends },\n    meta: response.meta || {},\n  });\n} else {\n  error = response.error?.message || 'x-trends trends fetch failed';\n  stdout = JSON.stringify({ ok: false, data: { trends: [] }, error: response.error || error });\n}\n\nreturn [{ json: { stdout, error } }];"
+        },
+        "id": "3c6082f3-c42b-4bd0-aecb-fef0b40f60ec",
+        "name": "Normalize X Trends",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "fileSelector": "/home/node/.n8n-files/config/watchlist.json",
+          "options": {}
+        },
+        "id": "99058aab-ea12-40b1-84b6-03926ed909cb",
+        "name": "Read Watchlist",
+        "type": "n8n-nodes-base.readWriteFile",
+        "typeVersion": 1,
+        "position": [
+          0,
+          1100
+        ],
+        "continueOnFail": true
       }
     ],
     "connections": {
@@ -358,6 +409,11 @@
               "node": "HTTP Request (Qiita)",
               "type": "main",
               "index": 0
+            },
+            {
+              "node": "Read Watchlist",
+              "type": "main",
+              "index": 0
             }
           ]
         ]
@@ -373,7 +429,7 @@
           ],
           [
             {
-              "node": "Execute Command",
+              "node": "HTTP Request (X Trends)",
               "type": "main",
               "index": 0
             }
@@ -402,17 +458,6 @@
           ]
         ]
       },
-      "Execute Command": {
-        "main": [
-          [
-            {
-              "node": "Merge All Sources",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
       "RSS Read (note-AI副業)": {
         "main": [
           [
@@ -420,6 +465,50 @@
               "node": "Merge All Sources",
               "type": "main",
               "index": 1
+            }
+          ]
+        ]
+      },
+      "RSS Read (note-AIツール)": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
+              "type": "main",
+              "index": 2
+            }
+          ]
+        ]
+      },
+      "HTTP Request (Brain)": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
+              "type": "main",
+              "index": 3
+            }
+          ]
+        ]
+      },
+      "HTTP Request (Tips)": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
+              "type": "main",
+              "index": 4
+            }
+          ]
+        ]
+      },
+      "HTTP Request (Qiita)": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
+              "type": "main",
+              "index": 5
             }
           ]
         ]
@@ -484,6 +573,28 @@
           [
             {
               "node": "Discord",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request (X Trends)": {
+        "main": [
+          [
+            {
+              "node": "Normalize X Trends",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize X Trends": {
+        "main": [
+          [
+            {
+              "node": "Merge All Sources",
               "type": "main",
               "index": 0
             }

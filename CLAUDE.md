@@ -15,6 +15,8 @@ Claude Code 向けのリポジトリガイドです。
 - [docs/operations.md](docs/operations.md) — 運用・調整
 - [docs/configuration.md](docs/configuration.md) — 環境変数
 - [docs/architecture.md](docs/architecture.md) — アーキテクチャ
+- [docs/watchlist-strategy.md](docs/watchlist-strategy.md) — 動的ウォッチリスト
+- [docs/improvement-roadmap.md](docs/improvement-roadmap.md) — 改善方針
 - [docs/troubleshooting.md](docs/troubleshooting.md) — 障害対応
 
 設計資料: `specs/`
@@ -23,16 +25,20 @@ Claude Code 向けのリポジトリガイドです。
 
 ```
 n8n-ai-trend-extractor/
-├── docker/Dockerfile           # n8n 2.23.4 + Python twitter-cli
+├── docker/Dockerfile           # n8n 2.23.4
+├── docker/x-trends.Dockerfile  # x-trends HTTP サーバー
 ├── docker-compose.yml
+├── config/
+│   └── watchlist.json          # 週次 Watchlist Generator が更新
 ├── workflows/
 │   ├── ai-trend-extractor.json
+│   ├── watchlist-generator.json
 │   └── error-handler.json
 ├── mock/x-tweets-sample.json
 ├── scripts/
 ├── docs/                       # ユーザー向けドキュメント
 ├── specs/                      # 設計書
-└── data/twitter-cli/           # Cookie キャッシュ（git 除外）
+└── x-trends/                   # x-trends 利用ガイド
 ```
 
 ## Runtime Commands
@@ -41,16 +47,17 @@ n8n-ai-trend-extractor/
 docker compose up -d --build
 docker compose logs -f n8n
 docker compose restart n8n
-docker compose exec n8n twitter search "Dify" --json --max 1
+docker compose exec n8n wget -qO- http://x-trends:3920/health
 ./scripts/verify-sources.sh
 ```
 
 ## Key Design Decisions
 
 - **Docker canonical** — npm 直接起動ではなく Compose 運用
-- **Python twitter-cli** — PyPI 版（npm `@public-clis/twitter-cli` は存在しない）
-- **Cookie via `.env`** — `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`
-- **Merge node required** — 6入力 combineAll → Code
+- **x-trends HTTP API** — Docker 内 x-trends サービス（`/api/v1/search`）
+- **Cookie via `.env`** — `TWITTER_AUTH_TOKEN`（x-trends 用）
+- **Merge node required** — 6入力 combineAll → Code（日次）
+- **Dynamic watchlist** — 週次 `watchlist-generator.json` → `config/watchlist.json`（日次は参考枠のみ）
 - **`$('ノード名').all()`** — n8n 2.x 構文（`$node` / `$items()` 廃止）
 - **Notification via Code node** — Handlebars 非対応
 - **Mock path** — `/home/node/.n8n-files/`（n8n 2.x ファイル制限）
@@ -73,4 +80,4 @@ docker compose exec n8n twitter search "Dify" --json --max 1
 | Google Gemini API (n8n Credential) | Yes |
 | Discord Webhook (`.env`) | Recommended |
 | Qiita token (`.env`) | Optional |
-| X Cookie (`.env`) | Production X only |
+| X Cookie (`.env` → x-trends サービス) | Production X only |

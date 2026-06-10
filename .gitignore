@@ -5,7 +5,9 @@
 
 # n8n data
 n8n_data/
-data/twitter-cli/
+
+# x-trends Docker build artifact (copy via scripts/setup-x-trends-docker.sh)
+docker/x-trends-*.tgz
 
 # OS
 .DS_Store
